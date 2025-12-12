@@ -1,0 +1,133 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.status {
+  color: #2563eb;
+  font-weight: 500;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.button {
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.button:hover {
+  background: #e2e8f0;
+}
+
+.active {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.gap {
+  width: 12px;
+}
+
+.placeholderNote {
+  margin-left: auto;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: right;
+}
+
+.editorWrapper {
+  position: relative;
+  min-height: 180px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.editorContent {
+  min-height: 160px;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #0f172a;
+}
+
+.editorContent p {
+  margin: 0 0 8px 0;
+}
+
+.editorContent ul,
+.editorContent ol {
+  padding-left: 20px;
+}
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.6);
+  color: #475569;
+  font-size: 13px;
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.error {
+  margin: 4px 0;
+  padding: 8px 10px;
+  background: #fef2f2;
+  border: 1px solid #fecdd3;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.hintRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}

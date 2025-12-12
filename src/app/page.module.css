@@ -1,0 +1,169 @@
+.page {
+  min-height: 100vh;
+  background-color: #f6f7fb;
+  color: #0f172a;
+  width: 100%;
+}
+
+.container {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 80%;
+}
+
+.content {
+  flex: 1;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.tableSection {
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  background-color: white;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  min-width: 1200px;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.superHeadRow {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.superHeadCell {
+  padding: 0.5rem 1rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+.superHeadBasic {
+  background-color: #fdf2f8;
+  color: #db2777;
+}
+
+.superHeadVisual {
+  background-color: #faf5ff;
+  color: #9333ea;
+}
+
+.superHeadBase {
+  background-color: #f8fafc;
+  color: #475569;
+}
+
+.superHeadBattle {
+  background-color: #f0fdfa;
+  color: #14b8a6;
+}
+
+.superHeadItem {
+  background-color: #fffbeb;
+  color: #d97706;
+}
+
+.headRow {
+  border-bottom: 1px solid #e2e8f0;
+  background-color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.headCell {
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.body {
+  border-top-width: 1px;
+  border-color: #f1f5f9;
+}
+
+.row {
+  background-color: white;
+}
+
+.rowEven {
+  background-color: rgba(248, 250, 252, 0.5);
+}
+
+.cell {
+  padding: 0.75rem 1rem;
+  color: #1e293b;
+}
+
+.cellCenter {
+  text-align: center;
+}
+
+.cellIndigo {
+  color: #4f46e5;
+}
+
+.cellPurple {
+  color: #9333ea;
+}
+
+.chip {
+  display: inline-block;
+  border-radius: 9999px;
+  background-color: #f1f5f9;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  color: #334155;
+}
+
+.userInfo {
+  padding: 1rem;
+  background-color: white;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 1.5rem;
+}
+
+.userInfoTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #0f172a;
+}
+
+.userInfoItem {
+  font-size: 0.875rem;
+  color: #475569;
+  margin-bottom: 0.25rem;
+}
+
+.userInfoItem:last-child {
+  margin-bottom: 0;
+}
+
+.userInfoLabel {
+  font-weight: 600;
+  color: #334155;
+}
+
+
+
+

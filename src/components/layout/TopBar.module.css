@@ -1,0 +1,93 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  height: 4rem;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 0 1.5rem;
+  backdrop-filter: blur(8px);
+}
+
+.left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.breadcrumb {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+}
+
+.breadcrumbItem {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.breadcrumbItemClickable {
+  color: #64748b;
+}
+
+.breadcrumbItemClickable:hover {
+  color: #475569;
+  text-decoration: underline;
+}
+
+.breadcrumbItemActive {
+  color: #94a3b8;
+  cursor: default;
+}
+
+.breadcrumbSeparator {
+  margin: 0 0.25rem;
+  color: #cbd5e1;
+}
+
+.title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.button {
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  background-color: white;
+  padding: 0.5rem;
+  color: #475569;
+}
+
+.button:hover {
+  border-color: #cbd5e1;
+}
+
+.buttonText {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+
+
+
