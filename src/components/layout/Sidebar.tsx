@@ -3,6 +3,7 @@
 import projectIcon from "@/app/assets/images/projectIcon.svg";
 import libraryIcon from "@/app/assets/images/libraryIcon.svg";
 import loginProductIcon from "@/app/assets/images/loginProductIcon.svg";
+import predefineSettingIcon from "@/app/assets/images/predefineSettingIcon.svg";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -179,25 +180,101 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     fetchAssets(libraryId);
   };
 
+  const handleLibraryPredefineClick = (projectId: string, libraryId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/${projectId}/${libraryId}/predefine`);
+  };
+
   const handleAssetClick = (projectId: string, libraryId: string, assetId: string) => {
     router.push(`/${projectId}/${libraryId}/${assetId}`);
+  };
+
+  const handleAssetDelete = async (
+    assetId: string,
+    libraryId: string,
+    e: React.MouseEvent
+  ) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this asset?')) return;
+    try {
+      const { error } = await supabase
+        .from('library_assets')
+        .delete()
+        .eq('id', assetId);
+      if (error) throw error;
+      await fetchAssets(libraryId);
+    } catch (err) {
+      console.error('Failed to delete asset', err);
+    }
   };
 
   const treeData: DataNode[] = useMemo(() => {
     const libs = libraries.filter((lib) =>
       currentIds.projectId ? lib.project_id === currentIds.projectId : true
     );
-    return libs.map<DataNode>((lib) => ({
-      title: lib.name,
-      key: `library-${lib.id}`,
-      isLeaf: false,
-      children: (assets[lib.id] || []).map<DataNode>((asset) => ({
-        title: asset.name,
-        key: `asset-${asset.id}`,
-        isLeaf: true,
-      })),
-    }));
-  }, [libraries, assets, currentIds.projectId]);
+    return libs.map<DataNode>((lib) => {
+      const libProjectId = lib.project_id;
+      return {
+        title: (
+          <div className={styles.itemRow}>
+            <div className={styles.itemMain}>
+              <Image
+                src={libraryIcon}
+                alt="Library"
+                width={16}
+                height={16}
+                className={styles.itemIcon}
+              />
+              <span className={styles.itemText}>{lib.name}</span>
+            </div>
+            <div className={styles.itemActions}>
+              <button
+                className={styles.iconButton}
+                aria-label="Library sections"
+                onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
+              >
+                <Image
+                  src={predefineSettingIcon}
+                  alt="Predefine"
+                  width={18}
+                  height={18}
+                />
+              </button>
+              <button
+                className={styles.iconButton}
+                aria-label="Delete library"
+                onClick={(e) => handleLibraryDelete(lib.id, e)}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ),
+        key: `library-${lib.id}`,
+        isLeaf: false,
+        children: (assets[lib.id] || []).map<DataNode>((asset) => ({
+          title: (
+            <div className={styles.itemRow}>
+              <div className={styles.itemMain}>
+                <span className={styles.itemText}>{asset.name}</span>
+              </div>
+              <div className={styles.itemActions}>
+                <button
+                  className={styles.iconButton}
+                  aria-label="Delete asset"
+                  onClick={(e) => handleAssetDelete(asset.id, lib.id, e)}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ),
+          key: `asset-${asset.id}`,
+          isLeaf: true,
+        })),
+      };
+    });
+  }, [libraries, assets, currentIds.projectId, handleLibraryPredefineClick, handleAssetDelete]);
 
   const selectedKey = useMemo(() => {
     const parts = pathname.split("/").filter(Boolean);

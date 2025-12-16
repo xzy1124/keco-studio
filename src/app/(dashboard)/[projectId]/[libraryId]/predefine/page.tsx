@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { useSupabase } from '@/lib/SupabaseContext';
 import { useParams } from 'next/navigation';
@@ -80,6 +80,62 @@ export default function PredefinePage() {
     setDraftSection({ name: '' });
     setErrors([]);
   };
+
+  // Load existing schema for this library
+  useEffect(() => {
+    if (!libraryId) return;
+    const load = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('library_field_definitions')
+          .select('*')
+          .eq('library_id', libraryId)
+          .order('section', { ascending: true })
+          .order('order_index', { ascending: true });
+        if (error) throw error;
+
+        const rows = (data || []) as {
+          section: string;
+          label: string;
+          data_type: FieldType;
+          required: boolean;
+          enum_options: string[] | null;
+        }[];
+
+        const sectionMap = new Map<string, SectionConfig>();
+
+        rows.forEach((row) => {
+          const sectionName = row.section;
+          if (!sectionMap.has(sectionName)) {
+            sectionMap.set(sectionName, {
+              id: uid(),
+              name: sectionName,
+              fields: [],
+            });
+          }
+          const section = sectionMap.get(sectionName)!;
+          const field: FieldConfig = {
+            id: uid(),
+            label: row.label,
+            dataType: row.data_type,
+            required: row.required,
+            enumOptions: row.data_type === 'enum' ? row.enum_options ?? [] : undefined,
+          };
+          section.fields.push(field);
+        });
+
+        const loadedSections = Array.from(sectionMap.values());
+        setSections(loadedSections);
+        if (loadedSections.length > 0) {
+          setActiveSectionId(loadedSections[0].id);
+        }
+      } catch (e: any) {
+        setErrors([e?.message || '加载已有定义失败']);
+      }
+    };
+
+    void load();
+  }, [libraryId, supabase]);
 
   const addField = () => {
     if (!activeSection) {

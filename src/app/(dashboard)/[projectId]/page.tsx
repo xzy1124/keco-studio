@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useSupabase } from '@/lib/SupabaseContext';
 import { getProject, Project } from '@/lib/services/projectService';
 import { listLibraries, Library } from '@/lib/services/libraryService';
@@ -10,6 +10,7 @@ import Image from 'next/image';
 
 export default function ProjectPage() {
   const params = useParams();
+  const router = useRouter();
   const supabase = useSupabase();
   const projectId = params.projectId as string;
   
@@ -72,6 +73,11 @@ export default function ProjectPage() {
     );
   }
 
+  const handleLibraryPredefineClick = (libraryId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/${projectId}/${libraryId}/predefine`);
+  };
+
   return (
     <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <div>
@@ -95,15 +101,32 @@ export default function ProjectPage() {
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  gap: '12px',
                 }}
               >
-                <div style={{ fontWeight: 600, color: '#0f172a' }}>{library.name}</div>
-                {library.description && (
-                  <div style={{ color: '#475569', fontSize: '14px', marginTop: '4px' }}>
-                    {library.description}
-                  </div>
-                )}
-                <Image src={predefineSettingIcon} alt="predefineSettingIcon" width={25} height={25} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, color: '#0f172a' }}>{library.name}</div>
+                  {library.description && (
+                    <div style={{ color: '#475569', fontSize: '14px', marginTop: '4px' }}>
+                      {library.description}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => handleLibraryPredefineClick(library.id, e)}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    padding: 0,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  aria-label="Library sections settings"
+                >
+                  <Image src={predefineSettingIcon} alt="predefineSettingIcon" width={25} height={25} />
+                </button>
               </div>
             ))}
           </div>

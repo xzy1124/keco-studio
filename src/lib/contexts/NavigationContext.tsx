@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, ReactNode, useEffect, useMemo, useState } from 'react';
-import { usePathname, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useSupabase } from '@/lib/SupabaseContext';
 
 type BreadcrumbItem = {
@@ -13,19 +13,21 @@ type NavigationContextType = {
   breadcrumbs: BreadcrumbItem[];
   currentProjectId: string | null;
   currentLibraryId: string | null;
+  currentAssetId: string | null;
 };
 
 const NavigationContext = createContext<NavigationContextType | null>(null);
 
 export function NavigationProvider({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const params = useParams();
   const supabase = useSupabase();
   const [projectName, setProjectName] = useState<string | null>(null);
   const [libraryName, setLibraryName] = useState<string | null>(null);
+  const [assetName, setAssetName] = useState<string | null>(null);
 
   const currentProjectId = useMemo(() => (params.projectId as string) || null, [params.projectId]);
   const currentLibraryId = useMemo(() => (params.libraryId as string) || null, [params.libraryId]);
+  const currentAssetId = useMemo(() => (params.assetId as string) || null, [params.assetId]);
 
   useEffect(() => {
     let mounted = true;
@@ -57,12 +59,26 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       } else {
         setLibraryName(null);
       }
+
+      // Resolve current asset name
+      if (currentAssetId) {
+        const { data, error } = await supabase
+          .from('library_assets')
+          .select('name')
+          .eq('id', currentAssetId)
+          .single();
+        if (mounted) {
+          setAssetName(error ? null : data?.name ?? null);
+        }
+      } else {
+        setAssetName(null);
+      }
     };
     fetchNames();
     return () => {
       mounted = false;
     };
-  }, [currentProjectId, currentLibraryId, supabase]);
+  }, [currentProjectId, currentLibraryId, currentAssetId, supabase]);
 
   // Build breadcrumbs from current route params
   const buildBreadcrumbs = (): BreadcrumbItem[] => {
@@ -82,6 +98,13 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       });
     }
 
+    if (currentAssetId) {
+      breadcrumbs.push({
+        label: assetName || 'Asset',
+        path: `/${currentProjectId}/${currentLibraryId}/${currentAssetId}`,
+      });
+    }
+
     return breadcrumbs;
   };
 
@@ -89,6 +112,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     breadcrumbs: buildBreadcrumbs(),
     currentProjectId,
     currentLibraryId,
+    currentAssetId,
   };
 
   return (
