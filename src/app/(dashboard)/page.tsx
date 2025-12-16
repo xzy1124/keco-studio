@@ -1,2 +1,4 @@
-export { default } from './projects/page';
+export default function DashboardPage() {
+  return null;
+}
 

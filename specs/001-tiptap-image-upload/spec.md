@@ -3,7 +3,10 @@
 **Feature Branch**: `001-tiptap-image-upload`  
 **Created**: 2025-01-10  
 **Status**: Draft  
-**Input**: User description: "现在项目是next+supabase+tiptap，现在tiptap需要增加一个图片上传功能（本地尝试），你觉得这个图片上传功能怎么写？如果是想先做一个小demo出来看一下效果，需要上传到OSS上吗？图片上传功能可以写成一个plugin- image.ts，然后集成到tiptap中吗？这样tiptap也好进行后续的功能拓展"
+**Input**: User description (translated from Chinese):  
+“The project uses Next + Supabase + Tiptap. Now we need to add an image upload feature to Tiptap (first trying local/demo only).  
+How would you implement this image upload feature? For a small demo to see the effect, do we need to upload images to an external OSS?  
+Can we implement the image upload as a plugin file `image.ts` and integrate it into Tiptap, so that it’s easy to extend Tiptap with more features later?”
 
 ## Overview
 

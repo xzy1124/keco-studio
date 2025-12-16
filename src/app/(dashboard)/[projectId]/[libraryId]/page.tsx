@@ -3,48 +3,83 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSupabase } from '@/lib/SupabaseContext';
+import { getProject, Project } from '@/lib/services/projectService';
 import { getLibrary, Library } from '@/lib/services/libraryService';
-import { PredefineEditor } from '@/components/editor/PredefineEditor';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { PredefineEditor } from '@/components/editor/PredefineEditor';
 
 export default function LibraryPage() {
-  const { projectId, libraryId } = useParams<{ projectId: string; libraryId: string }>();
+  const params = useParams();
   const supabase = useSupabase();
-  const { userProfile } = useAuth();
+  const projectId = params.projectId as string;
+  const libraryId = params.libraryId as string;
+  
+  const [project, setProject] = useState<Project | null>(null);
   const [library, setLibrary] = useState<Library | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  const { userProfile } = useAuth();
   useEffect(() => {
-    const fetchLibrary = async () => {
+    const fetchData = async () => {
+      if (!projectId || !libraryId) return;
+      
       setLoading(true);
       setError(null);
+      
       try {
-        const data = await getLibrary(supabase, libraryId, projectId);
-        setLibrary(data);
+        const [projectData, libraryData] = await Promise.all([
+          getProject(supabase, projectId),
+          getLibrary(supabase, libraryId, projectId),
+        ]);
+        
+        if (!projectData) {
+          setError('Project not found');
+          return;
+        }
+        
+        if (!libraryData) {
+          setError('Library not found');
+          return;
+        }
+        
+        setProject(projectData);
+        setLibrary(libraryData);
       } catch (e: any) {
         setError(e?.message || 'Failed to load library');
       } finally {
         setLoading(false);
       }
     };
-    fetchLibrary();
-  }, [libraryId, supabase]);
+
+    fetchData();
+  }, [projectId, libraryId, supabase]);
 
   if (loading) {
-    return <div style={{ padding: '1rem' }}>Loading library...</div>;
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <div>Loading library...</div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div style={{ padding: '1rem', color: '#dc2626' }}>{error}</div>;
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <div style={{ color: '#dc2626' }}>{error}</div>
+      </div>
+    );
   }
 
-  if (!library) {
-    return <div style={{ padding: '1rem' }}>Library not found</div>;
+  if (!library || !project) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <div>Library not found</div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+    <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       {userProfile ? (
         <PredefineEditor
           docId={`${projectId}-${libraryId}`}

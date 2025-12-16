@@ -1,47 +1,47 @@
-# Keco Studio 项目架构设计
+# Keco Studio Architecture Design
 
-## 整体架构
+## Overall Architecture
 
-### 1. 路由结构设计
+### 1. Routing Structure
 
-使用 Next.js App Router 的嵌套路由和动态路由功能：
+The app uses the Next.js App Router with nested and dynamic routes:
 
 ```
 app/
-├── layout.tsx                    # 根布局（SupabaseProvider）
-├── page.tsx                      # 首页（重定向到默认空间）
-├── (dashboard)/                  # 路由组，所有需要认证的页面
-│   ├── layout.tsx               # Dashboard 布局（Sidebar + TopBar）
-│   ├── page.tsx                 # 默认页面（重定向到第一个空间）
-│   ├── [spaceId]/               # 动态路由：空间ID
-│   │   ├── page.tsx            # 空间详情页
-│   │   ├── [projectId]/        # 动态路由：项目ID
-│   │   │   ├── page.tsx       # 项目详情页
-│   │   │   └── [libraryId]/   # 动态路由：库ID
-│   │   │       └── page.tsx  # 库详情页（资源展示）
-│   │   └── layout.tsx         # 空间布局（可选，用于空间级别的导航）
+├── layout.tsx                    # Root layout (SupabaseProvider)
+├── page.tsx                      # Home (redirects to default space)
+├── (dashboard)/                  # Route group for all authenticated pages
+│   ├── layout.tsx               # Dashboard layout (Sidebar + TopBar)
+│   ├── page.tsx                 # Default page (redirects to first space)
+│   ├── [spaceId]/               # Dynamic route: space ID
+│   │   ├── page.tsx            # Space detail page
+│   │   ├── [projectId]/        # Dynamic route: project ID
+│   │   │   ├── page.tsx       # Project detail page
+│   │   │   └── [libraryId]/   # Dynamic route: library ID
+│   │   │       └── page.tsx  # Library detail page (resource view)
+│   │   └── layout.tsx         # Optional space layout (space-level navigation)
 │   └── ...
-└── auth/                         # 认证相关页面
+└── auth/                         # Auth-related pages
     ├── login/
     └── register/
 ```
 
-### 2. 组件层次结构
+### 2. Component Hierarchy
 
 ```
 RootLayout (layout.tsx)
 └── SupabaseProvider
     └── DashboardLayout (app/(dashboard)/layout.tsx)
-        ├── Sidebar (左侧边栏)
-        │   ├── UserProfile (用户信息)
-        │   ├── SpaceList (空间列表)
-        │   └── ProjectList (项目列表)
+        ├── Sidebar (left sidebar)
+        │   ├── UserProfile (user info)
+        │   ├── SpaceList (space list)
+        │   └── ProjectList (project list)
         └── MainContent
-            ├── TopBar (顶部栏)
-            │   ├── Breadcrumb (面包屑导航)
-            │   └── ActionButtons (操作按钮)
-            └── PageContent (页面内容)
-                └── [动态内容，根据路由显示]
+            ├── TopBar (top bar)
+            │   ├── Breadcrumb (breadcrumb navigation)
+            │   └── ActionButtons (action buttons)
+            └── PageContent (page content)
+                └── [dynamic content based on route]
 ```
 
 ### 3. 状态管理方案

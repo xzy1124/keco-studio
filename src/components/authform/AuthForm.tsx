@@ -5,6 +5,11 @@ import Image from "next/image";
 import loginImg from "@/app/assets/images/loginImg.png";
 import { useSupabase } from "@/lib/SupabaseContext";
 import styles from "./AuthForm.module.css";
+import loginMessageIcon from "@/app/assets/images/loginMessageIcon.svg";
+import loginProductIcon from "@/app/assets/images/loginProductIcon.svg";
+import loginQuestionIcon from "@/app/assets/images/loginQuestionIcon.svg";
+import loginServiceIcon from "@/app/assets/images/loginServiceIcon.svg";
+import loginLeftArrowIcon from "@/app/assets/images/loginArrowIcon.svg";
 
 type Mode = "login" | "register";
 
@@ -36,6 +41,7 @@ export default function AuthForm() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState(false);
 
   const switchMode = (next: Mode) => {
     setMode(next);
@@ -60,11 +66,11 @@ export default function AuthForm() {
 
     const { email, username, password, confirmPassword } = regForm;
     if (!email || !username || !password) {
-      setErrorMsg("Email、用户名和密码不能为空");
+      setErrorMsg("Email, username and password cannot be empty");
       return;
     }
     if (password !== confirmPassword) {
-      setErrorMsg("两次密码输入不一致");
+      setErrorMsg("Passwords do not match");
       return;
     }
 
@@ -76,9 +82,9 @@ export default function AuthForm() {
         options: { data: { username } },
       });
       if (error) throw error;
-      setMessage("注册成功，已自动同步 profiles");
+      setMessage("Sign-up succeeded and profiles are synced");
     } catch (err: any) {
-      setErrorMsg(err?.message || "注册失败");
+      setErrorMsg(err?.message || "Sign-up failed");
     } finally {
       setLoading(false);
     }
@@ -88,10 +94,11 @@ export default function AuthForm() {
     e.preventDefault();
     setMessage(null);
     setErrorMsg(null);
+    setPasswordError(false);
 
     const { email, password } = loginForm;
     if (!email || !password) {
-      setErrorMsg("Email 和密码不能为空");
+      setErrorMsg("Email and password cannot be empty");
       return;
     }
 
@@ -99,9 +106,16 @@ export default function AuthForm() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      setMessage("登录成功");
+      setMessage("Signed in successfully");
+      setPasswordError(false);
     } catch (err: any) {
-      setErrorMsg(err?.message || "登录失败");
+      if(err?.message.includes("Invalid login credentials")) {
+        setErrorMsg("Incorrect password, please try again.");
+        setPasswordError(true);
+      } else {
+        setErrorMsg(err?.message || "Sign-in failed");
+        setPasswordError(false);
+      }
     } finally {
       setLoading(false);
     }
@@ -111,18 +125,55 @@ export default function AuthForm() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.card}>
-        <div className={styles.formSide}>
-          <button className={styles.backBtn} aria-label="Back">
-            ←
+      {/* Header */}
+      <header className={styles.header}>
+        <div className={styles.headerLeft}>
+          <div className={styles.headerLogo}>
+            <Image src={loginProductIcon} alt="Logo" width={32} height={32} />
+            <div className={styles.headerBrand}>
+              <div className={styles.brandName}>Keco Studio</div>
+              <div className={styles.brandSlogan}>for game designers</div>
+            </div>
+          </div>
+        </div>
+        <div className={styles.headerRight}>
+          <button className={styles.headerIconBtn} aria-label="Messages">
+            <Image src={loginMessageIcon} alt="Messages" width={20} height={20} />
           </button>
+          <button className={styles.headerIconBtn} aria-label="Service">
+            <Image src={loginServiceIcon} alt="Service" width={20} height={20} />
+          </button>
+          <button className={styles.headerIconBtn} aria-label="Question">
+            <Image src={loginQuestionIcon} alt="Question" width={20} height={20} />
+          </button>
+        </div>
+      </header>
 
-          <div className={styles.logo}>K</div>
-          <h1 className={styles.title}>{isRegister ? "REGISTER" : "LOGIN"}</h1>
+      <div className={styles.card}>
+        <div className={styles.cardInner}>
+          <div className={styles.formSide}>
+          <button 
+            className={styles.backBtn} 
+            aria-label="Back"
+            onClick={() => switchMode(isRegister ? "login" : "register")}
+          >
+            <Image src={loginLeftArrowIcon} alt="Back" width={20} height={20} />
+          </button>
+          <div className={styles.logo}>
+            <Image src={loginProductIcon} alt="Logo" width={32} height={32} />
+          </div>
+          <h1 className={styles.title}>
+            {isRegister ? "REGISTER" : (
+              <>
+                <span className={styles.titleMain}>Login to </span>
+                <span className={styles.titleBrand}>Keco</span>
+              </>
+            )}
+          </h1>
 
           {isRegister ? (
             <form className={styles.form} onSubmit={handleRegister} autoComplete="off">
-              {/* 隐藏的假字段来混淆浏览器自动填充 */}
+              {/* Hidden dummy fields to confuse browser autofill */}
               <input type="text" name="fake-email" autoComplete="off" style={{ display: 'none' }} tabIndex={-1} />
               <input type="password" name="fake-password" autoComplete="off" style={{ display: 'none' }} tabIndex={-1} />
               
@@ -179,13 +230,13 @@ export default function AuthForm() {
                   required
                 />
               </label>
-              <button type="submit" className={styles.submit} disabled={loading}>
+              <button type="submit" className={`${styles.submit} ${styles.submitRegister}`} disabled={loading}>
                 {loading ? "Registering..." : "Register"}
               </button>
             </form>
           ) : (
             <form className={styles.form} onSubmit={handleLogin} autoComplete="off">
-              {/* 隐藏的假字段来混淆浏览器自动填充 */}
+              {/* Hidden dummy fields to confuse browser autofill */}
               <input type="text" name="fake-username" autoComplete="off" style={{ display: 'none' }} tabIndex={-1} />
               <input type="password" name="fake-password" autoComplete="off" style={{ display: 'none' }} tabIndex={-1} />
               
@@ -206,23 +257,35 @@ export default function AuthForm() {
               <label className={styles.label}>
                 Password
                 <input
-                  className={styles.input}
+                  className={`${styles.input} ${passwordError ? styles.inputError : ''}`}
                   name="login-password-input"
                   type="password"
                   placeholder="type your password..."
                   autoComplete="new-password"
                   value={loginForm.password}
-                  onChange={updateLogin("password")}
+                  onChange={(e) => {
+                    updateLogin("password")(e);
+                    setPasswordError(false);
+                  }}
                   required
                 />
               </label>
-              <button type="submit" className={styles.submit} disabled={loading}>
+              {errorMsg ? <div className={styles.error}>{errorMsg}</div> : null}
+              <button 
+                type="button" 
+                className={styles.forgotPassword}
+                onClick={() => {
+                  // TODO: Implement forgot password functionality
+                }}
+              >
+                Forget you password?
+              </button>
+              <button type="submit" className={`${styles.submit} ${styles.submitLogin}`} disabled={loading}>
                 {loading ? "Logging in..." : "Login"}
               </button>
             </form>
           )}
 
-          {errorMsg ? <div className={styles.error}>{errorMsg}</div> : null}
           {message ? <div className={styles.success}>{message}</div> : null}
 
           <div className={styles.footer}>
@@ -244,15 +307,16 @@ export default function AuthForm() {
           </div>
         </div>
 
-        <div className={styles.imageSide}>
-          <Image
-            src={loginImg}
-            alt="Auth illustration"
-            fill
-            className={styles.image}
-            priority
-            sizes="(max-width: 960px) 100vw, 50vw"
-          />
+          <div className={styles.imageSide}>
+            <Image
+              src={loginImg}
+              alt="Auth illustration"
+              fill
+              className={styles.image}
+              priority
+              sizes="(max-width: 960px) 100vw, 50vw"
+            />
+          </div>
         </div>
       </div>
     </div>

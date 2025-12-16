@@ -3,7 +3,10 @@
 **Feature Branch**: `001-tiptap-collaboration`  
 **Created**: 2025-01-10  
 **Status**: Draft  
-**Input**: User description: "现在一个标签页在Microsoft，一个标签页在Google是可以实现登录不同账号的，在同一个浏览器是不行的。我想实现的功能是：不同账号对同一个tiptap文档协同是不是ok的，现在想问一下怎么在一个账号可以看到另一个账号的titap编辑文档，有什么比较好的方案吗？可以提出我看看"
+**Input**: User description (translated from Chinese):  
+“Right now, if I open one tab in Microsoft Edge and another in Google Chrome, I can log in with different accounts, but in the same browser it doesn’t work that way.  
+What I want is: can different accounts collaboratively edit the same Tiptap document?  
+How can one account see a Tiptap document edited by another account? What’s a good approach for this? Please propose some options for me to review.”
 
 ## Overview
 

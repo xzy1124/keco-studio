@@ -1,159 +1,158 @@
-# 组件设计总结
+# Component Design Summary
 
-## 架构概述
+## Architecture Overview
 
-基于 Next.js App Router 的嵌套路由和组件化设计，实现了清晰的职责分离和可维护的代码结构。
+The application is built on the Next.js App Router with nested routes and a component‑driven design to achieve clear separation of concerns and maintainable structure.
 
-## 核心设计理念
+## Core Design Principles
 
-### 1. URL 驱动的状态管理
-- 使用 Next.js 动态路由参数 (`[spaceId]`, `[projectId]`, `[libraryId]`) 来反映应用状态
-- URL 变化自动触发页面更新
-- 支持浏览器前进/后退、书签、分享等功能
+### 1. URL‑Driven State Management
+- Use Next.js dynamic route params (`[spaceId]`, `[projectId]`, `[libraryId]`) to reflect application state.
+- URL changes automatically trigger page updates.
+- Supports browser back/forward, bookmarks, and sharing.
 
-### 2. Context API 管理全局状态
-- **AuthContext**: 统一管理用户认证状态，避免在多个组件中重复逻辑
-- **NavigationContext**: 自动从路由参数生成面包屑，提供当前路由信息
+### 2. Global State via Context API
+- **AuthContext**: Centralizes user authentication state to avoid duplicating logic across components.
+- **NavigationContext**: Automatically builds breadcrumbs from route params and exposes current route information.
 
-### 3. 组件职责分离
-- **Layout 组件**: 负责页面结构（Sidebar + TopBar）
-- **页面组件**: 负责具体内容展示
-- **业务逻辑**: 集中在 Context 和 Service 层
+### 3. Clear Component Responsibilities
+- **Layout components**: Own page structure (Sidebar + TopBar).
+- **Page components**: Own specific content rendering.
+- **Business logic**: Lives in Context and service layers.
 
-## 组件层次结构
+## Component Hierarchy
 
 ```
 RootLayout (app/layout.tsx)
-├── SupabaseProvider (数据库客户端)
-├── AuthProvider (认证状态)
-└── NavigationProvider (路由状态)
+├── SupabaseProvider (database client)
+├── AuthProvider (auth state)
+└── NavigationProvider (navigation state)
     └── DashboardLayout (app/(dashboard)/layout.tsx)
         ├── Sidebar
-        │   ├── UserProfile (用户信息)
-        │   ├── ProjectsList (项目列表，可点击导航)
-        │   └── LibrariesList (库列表，可点击导航)
+        │   ├── UserProfile (user info)
+        │   ├── ProjectsList (project list, clickable for navigation)
+        │   └── LibrariesList (library list, clickable for navigation)
         └── MainContent
             ├── TopBar
-            │   ├── Breadcrumb (自动生成，可点击)
-            │   └── ActionButtons (操作按钮)
-            └── PageContent (根据路由动态显示)
+            │   ├── Breadcrumb (auto‑generated, clickable)
+            │   └── ActionButtons (action buttons)
+            └── PageContent (dynamic content based on route)
                 ├── SpacePage
                 ├── ProjectPage
                 └── LibraryPage
 ```
 
-## 关键组件说明
+## Key Components
 
 ### DashboardLayout
-**位置**: `src/components/layout/DashboardLayout.tsx`
+**Location**: `src/components/layout/DashboardLayout.tsx`
 
-**职责**:
-- 提供统一的布局结构（Sidebar + TopBar + Content）
-- 处理认证检查（未登录时显示登录表单）
-- 从 NavigationContext 获取面包屑信息并传递给 TopBar
+**Responsibilities**:
+- Provide a unified layout (Sidebar + TopBar + Content).
+- Perform auth checks (render auth form when unauthenticated).
+- Pull breadcrumb information from NavigationContext and pass it to TopBar.
 
-**特点**:
-- 使用 Context 获取状态，避免 prop drilling
-- 自动处理认证状态
+**Characteristics**:
+- Uses Context for state, avoiding prop drilling.
+- Handles auth state transitions automatically.
 
 ### Sidebar
-**位置**: `src/components/layout/Sidebar.tsx`
+**Location**: `src/components/layout/Sidebar.tsx`
 
-**职责**:
-- 显示用户信息（头像、名称）
-- 显示项目列表（点击后导航到项目页面）
-- 显示库列表（点击后导航到库页面）
-- 根据当前路由高亮选中的项目/库
+**Responsibilities**:
+- Display user info (avatar, name).
+- Display projects list (navigate to project page on click).
+- Display libraries list (navigate to library page on click).
+- Highlight the active project/library based on the current route.
 
-**交互**:
-- 点击项目：`router.push('/${spaceId}/${projectId}')`
-- 点击库：`router.push('/${spaceId}/${projectId}/${libraryId}')`
-- 使用 `useNavigation()` 获取当前路由，判断是否高亮
+**Interactions**:
+- Click project: `router.push('/${spaceId}/${projectId}')`
+- Click library: `router.push('/${spaceId}/${projectId}/${libraryId}')`
+- Use `useNavigation()` to read current route and determine highlighting.
 
 ### TopBar
-**位置**: `src/components/layout/TopBar.tsx`
+**Location**: `src/components/layout/TopBar.tsx`
 
-**职责**:
-- 显示面包屑导航（从 NavigationContext 自动生成）
-- 提供操作按钮（Share、More、Add）
+**Responsibilities**:
+- Display breadcrumb navigation (auto‑generated from NavigationContext).
+- Provide action buttons (Share, More, Add).
 
-**交互**:
-- 点击面包屑项：导航到对应路径
-- 最后一个面包屑项不可点击（当前页面）
+**Interactions**:
+- Clicking a breadcrumb item navigates to the corresponding path.
+- The last breadcrumb item is not clickable (represents the current page).
 
 ### NavigationContext
-**位置**: `src/lib/contexts/NavigationContext.tsx`
+**Location**: `src/lib/contexts/NavigationContext.tsx`
 
-**职责**:
-- 从 Next.js 路由参数自动生成面包屑
-- 提供当前路由信息（spaceId, projectId, libraryId）
+**Responsibilities**:
+- Automatically generate breadcrumbs from Next.js route params.
+- Provide current route information (`spaceId`, `projectId`, `libraryId`).
 
-**特点**:
-- 完全基于 URL，无需手动管理状态
-- 自动同步路由变化
+**Characteristics**:
+- Entirely URL‑driven; no manual state management needed.
+- Automatically reacts to route changes.
 
 ### AuthContext
-**位置**: `src/lib/contexts/AuthContext.tsx`
+**Location**: `src/lib/contexts/AuthContext.tsx`
 
-**职责**:
-- 管理用户认证状态
-- 获取用户 profile 信息
-- 提供登出功能
+**Responsibilities**:
+- Manage user authentication state.
+- Fetch user profile information.
+- Provide sign‑out functionality.
 
-**特点**:
-- 统一管理认证逻辑，避免重复代码
-- 自动监听 Supabase auth 状态变化
+**Characteristics**:
+- Centralizes auth logic to avoid duplication.
+- Automatically listens to Supabase auth state changes.
 
-## 路由结构
+## Route Structure
 
 ```
 app/
-├── layout.tsx                    # 根布局（Providers）
-├── page.tsx                      # 首页（可选，重定向）
-└── (dashboard)/                  # 路由组（所有需要认证的页面）
-    ├── layout.tsx               # Dashboard 布局
-    ├── page.tsx                 # 默认页面（重定向）
-    └── [spaceId]/               # 动态路由：空间
-        ├── page.tsx            # 空间详情页
-        └── [projectId]/        # 动态路由：项目
-            ├── page.tsx       # 项目详情页
-            └── [libraryId]/   # 动态路由：库
-                └── page.tsx  # 库详情页
+├── layout.tsx                    # Root layout (Providers)
+├── page.tsx                      # Home (optional, redirect)
+└── (dashboard)/                  # Route group for all authenticated pages
+    ├── layout.tsx               # Dashboard layout
+    ├── page.tsx                 # Default page (redirect)
+    └── [spaceId]/               # Dynamic route: space
+        ├── page.tsx            # Space detail page
+        └── [projectId]/        # Dynamic route: project
+            ├── page.tsx       # Project detail page
+            └── [libraryId]/   # Dynamic route: library
+                └── page.tsx  # Library detail page
 ```
 
-## 数据流
+## Data Flow
 
 ```
-1. 用户点击 Sidebar 中的项目/库
+1. User clicks a project/library item in the Sidebar
    ↓
-2. 调用 router.push() 更新 URL
+2. `router.push()` updates the URL
    ↓
-3. Next.js Router 更新路由参数
+3. Next.js Router updates route params
    ↓
-4. NavigationContext 检测到路由变化，更新面包屑
+4. NavigationContext detects route change and rebuilds breadcrumbs
    ↓
-5. 页面组件读取路由参数，从 Supabase 获取数据
+5. Page component reads route params and fetches data from Supabase
    ↓
-6. Sidebar 根据当前路由高亮选中项
+6. Sidebar highlights the active item based on current route
    ↓
-7. TopBar 显示更新后的面包屑
+7. TopBar displays updated breadcrumbs
    ↓
-8. 页面内容更新
+8. Page content updates
 ```
 
-## 优势
+## Advantages
 
-1. **可维护性**: 清晰的组件职责分离，易于理解和修改
-2. **可扩展性**: 易于添加新的路由和页面
-3. **用户体验**: URL 反映应用状态，支持浏览器导航
-4. **代码复用**: Context 和 Layout 组件可在多个页面复用
-5. **类型安全**: TypeScript 提供完整的类型检查
+1. **Maintainability**: Clear separation of component responsibilities; easy to understand and modify.
+2. **Extensibility**: Easy to add new routes and pages.
+3. **User Experience**: URL reflects application state and supports browser navigation.
+4. **Code Reuse**: Context and layout components are reusable across multiple pages.
+5. **Type Safety**: TypeScript provides full static type checking.
 
-## 后续优化方向
+## Future Improvements
 
-1. **数据缓存**: 使用 React Query 或 SWR 缓存数据
-2. **加载状态**: 添加 Suspense 和加载指示器
-3. **错误处理**: 统一的错误边界和错误处理
-4. **权限控制**: 在路由层面添加权限检查
-5. **SEO 优化**: 如果需要，添加元数据和结构化数据
-
+1. **Data Caching**: Use React Query or SWR to cache data.
+2. **Loading States**: Add Suspense and loading indicators.
+3. **Error Handling**: Introduce unified error boundaries and error handling patterns.
+4. **Access Control**: Add permission checks at the routing layer.
+5. **SEO**: Add metadata and structured data if SEO becomes a requirement.

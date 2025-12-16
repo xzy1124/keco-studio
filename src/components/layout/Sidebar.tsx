@@ -2,6 +2,7 @@
 
 import projectIcon from "@/app/assets/images/projectIcon.svg";
 import libraryIcon from "@/app/assets/images/libraryIcon.svg";
+import loginProductIcon from "@/app/assets/images/loginProductIcon.svg";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -29,18 +30,18 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = useSupabase();
-  // 获取显示名称：优先 username，其次 full_name，最后 email
+  // Resolve display name: prefer username, then full_name, then email
   const displayName = userProfile?.username || userProfile?.full_name || userProfile?.email || "Guest";
   const isGuest = !userProfile;
   
-  // 获取头像：如果有有效的 avatar_url 则使用，否则使用默认头像或首字母
+  // Resolve avatar: use avatar_url if valid, otherwise fallback to initial
   const hasValidAvatar = userProfile?.avatar_url && userProfile.avatar_url.trim() !== "";
   const avatarInitial = displayName.charAt(0).toUpperCase();
   const [avatarError, setAvatarError] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // 点击外部区域关闭菜单
+  // Close user menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -61,13 +62,13 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     setShowMenu(false);
     try {
       await supabase.auth.signOut();
-      // 调用父组件的回调以确保状态同步
+      // Call parent callback to keep auth state in sync
       if (onAuthRequest) {
         onAuthRequest();
       }
     } catch (error) {
       console.error('Logout failed', error);
-      // 即使登出失败，也尝试调用回调以保持状态一致
+      // Even if sign-out fails, still notify parent to keep state consistent
       if (onAuthRequest) {
         onAuthRequest();
       }
@@ -96,6 +97,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
 
   const currentIds = useMemo(() => {
     const parts = pathname.split("/").filter(Boolean);
+    // Handle /[projectId]/[libraryId] structure
     const projectId = parts[0] || null;
     const libraryId = parts[1] || null;
     return { projectId, libraryId };
@@ -154,7 +156,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     try {
       await deleteProject(supabase, projectId);
       if (currentIds.projectId === projectId) {
-        router.push('/projects');
+        router.push('/');
       }
       fetchProjects();
       setLibraries([]);
@@ -187,42 +189,12 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
-        <div className={styles.avatarContainer} ref={menuRef}>
-          {hasValidAvatar && !avatarError ? (
-            <Image
-              src={userProfile.avatar_url!}
-              alt={displayName}
-              width={40}
-              height={40}
-              className={styles.avatar}
-              onClick={() => setShowMenu(!showMenu)}
-              onError={() => setAvatarError(true)}
-            />
-          ) : (
-            <div
-              className={styles.logo}
-              onClick={() => setShowMenu(!showMenu)}
-            >
-              {avatarInitial}
-            </div>
-          )}
-          {showMenu && (
-            <div className={styles.dropdownMenu}>
-              {isGuest ? (
-                <button className={styles.logoutButton} onClick={handleAuthNav}>
-                  登录 / 注册
-                </button>
-              ) : (
-                <button className={styles.logoutButton} onClick={handleLogout}>
-                  退出登录
-                </button>
-              )}
-            </div>
-          )}
+        <div className={styles.headerLogo}>
+          <Image src={loginProductIcon} alt="Keco Studio" width={32} height={32} />
+          <div className={styles.headerBrand}>
+            <div className={styles.brandName}>Keco Studio</div>
+            <div className={styles.brandSlogan}>for game designers</div>
         </div>
-        <div className={styles.headerText}>
-          <div className={styles.title}>{displayName}</div>
-          <div className={styles.subtitle}>for game designers</div>
         </div>
       </div>
 
@@ -242,7 +214,6 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
           <button className={styles.addButton} onClick={() => setShowProjectModal(true)}>+</button>
         </div>
         {loadingProjects && <div className={styles.hint}>Loading projects...</div>}
-        {error && <div className={styles.error}>{error}</div>}
         <div className={styles.sectionList}>
           {projects.map((project) => {
             const isActive = currentIds.projectId === project.id;
@@ -276,7 +247,6 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
             <div className={styles.hint}>No projects. Create one.</div>
           )}
         </div>
-
         <div className={styles.sectionTitle}>
           <span>Libraries</span>
           <button

@@ -1,9 +1,10 @@
 <!--
 Sync Impact Report
-- Version change: none -> 1.0.0
-- Modified principles: initial draft
-- Added sections: Core Principles, Additional Constraints, Development Workflow, Governance
-- Templates requiring updates: ⚠ .specify/templates/plan-template.md; ⚠ .specify/templates/spec-template.md; ⚠ .specify/templates/tasks-template.md; ⚠ .cursor/commands/speckit.*.md (review phrasing if needed)
+- Version change: 1.0.0 -> 1.0.1
+- Modified principles: none (no semantic changes)
+- Added sections: none
+- Removed sections: none
+- Templates requiring updates: ✅ none
 - Follow-up TODOs: none
 -->
 
@@ -18,7 +19,7 @@ Implement UI to match F2C MCP Figma designs with pixel-level fidelity, covering 
 Use Next.js App Router with correct client/server boundaries and on-demand imports to avoid hydration errors; all Supabase access must respect RLS with schema managed by migrations and data validated on both client and server.
 
 ### III. Typed Minimal & Documented Code
-Keep dependencies minimal and pinned in package.json; use TypeScript strict mode with no implicit any; style with .module.css only, sharing CSS variables for colors/spacing/radii; document non-obvious logic.
+Keep dependencies minimal and pinned in package.json; use TypeScript strict mode with no implicit any; style with .module.css only, sharing CSS variables for colors/spacing/radii; document non-obvious logic in English.
 
 ### IV. Resilient Async & Error Handling
 Handle every async path with explicit error states and fallbacks to prevent crashes; surface meaningful Supabase/network errors; degrade gracefully when data is unavailable.
@@ -36,10 +37,11 @@ Favor small, composable components with clear semantics; reuse styles and logic 
 - For UI work, validate against Figma (F2C MCP) for pixel fidelity and responsive states.
 - Enforce TypeScript strict, lint, and build checks; avoid any; ensure async paths handle errors.
 - Use CSS modules with shared variables; prefer reuse over duplication; document intent where needed.
+- Maintain automated tests for critical user flows and UI layouts to prevent regressions, especially for App Router behavior, Supabase integration, and Figma-aligned UI.
 
 ## Governance
 - This constitution guides feature and code decisions; conflicting practices must be aligned to it.
 - Amendments require rationale and a semantic version bump (MAJOR for breaking governance, MINOR for new principles/sections, PATCH for clarifications).
 - Reviews must check compliance with principles, RLS safety, and Figma pixel fidelity.
 
-**Version**: 1.0.0 | **Ratified**: 2025-12-10 | **Last Amended**: 2025-12-10
+**Version**: 1.0.1 | **Ratified**: 2025-12-10 | **Last Amended**: 2025-12-15

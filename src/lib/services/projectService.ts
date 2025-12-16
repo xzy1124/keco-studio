@@ -67,6 +67,27 @@ export async function listProjects(supabase: SupabaseClient): Promise<Project[]>
   return data || [];
 }
 
+export async function getProject(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<Project | null> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('id', projectId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // Not found
+      return null;
+    }
+    throw error;
+  }
+
+  return data;
+}
+
 export async function deleteProject(
   supabase: SupabaseClient,
   projectId: string

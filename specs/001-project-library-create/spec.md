@@ -3,7 +3,16 @@
 **Feature Branch**: `001-project-library-create`  
 **Created**: 2025-12-12  
 **Status**: Draft  
-**Input**: User description: "现在项目需要实现新建project和新建library功能 并且项目已经去除了space层级结构！保留了project和library。我描述一下https://www.figma.com/design/oiV14T1GHrP3jqecu50tbg/Keco?node-id=928-73881&t=L4jXlQLENncTBlx6-4  这个figma设计稿是新建project的页面，点击新建项目按钮，就会出现一个弹窗组件：https://www.figma.com/design/oiV14T1GHrP3jqecu50tbg/Keco?node-id=928-74209&t=L4jXlQLENncTBlx6-4 ，组件功能就是设置项目的名称，项目的一些说明，所以需要建 项目的一个数据库表来保存项目信息；新建完项目后，页面是这个样子： 左侧 libraries处会出现几个默认的文件夹，点击其中一个文件夹就可以进行新建library，新建library的过程和project一样，都是一个弹窗组件，里面可以设置library的name和一些说明，所以也需要建立一个library表，建好library后，页面就是这个样子的：https://www.figma.com/design/oiV14T1GHrP3jqecu50tbg/Keco?node-id=1049-64881&t=L4jXlQLENncTBlx6-4，点击建好的library后，右侧就是tiptap编辑区域了。 可以使用f2c-mcp根据获取到具体figma设计稿的样式细节哦。"
+**Input**: User description (translated from Chinese):  
+“The project now needs to support creating new projects and new libraries. The previous `space` level has been removed; only `project` and `library` remain.  
+This Figma design shows the new project page: https://www.figma.com/design/oiV14T1GHrP3jqecu50tbg/Keco?node-id=928-73881&t=L4jXlQLENncTBlx6-4.  
+When the user clicks the ‘New Project’ button, a modal appears: https://www.figma.com/design/oiV14T1GHrP3jqecu50tbg/Keco?node-id=928-74209&t=L4jXlQLENncTBlx6-4.  
+The modal is used to set the project name and description, so we need a `projects` table to persist this information.  
+After creating a project, the page looks like this: several default folders appear on the left under Libraries. Clicking one of those folders lets the user create a new library.  
+Creating a library works the same way as creating a project: a modal where the user sets the library name and description, backed by a `libraries` table.  
+After creating the library, the page looks like this: https://www.figma.com/design/oiV14T1GHrP3jqecu50tbg/Keco?node-id=1049-64881&t=L4jXlQLENncTBlx6-4.  
+When the user clicks the library, the right‑hand side shows the Tiptap editor area.  
+You can use f2c‑mcp to pull detailed styles from the Figma design.” 
 
 ## User Scenarios & Testing *(mandatory)*
 

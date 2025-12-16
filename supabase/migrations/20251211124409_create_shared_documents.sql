@@ -44,10 +44,11 @@ create index if not exists idx_shared_documents_doc_id on public.shared_document
 create index if not exists idx_shared_documents_owner_id on public.shared_documents(owner_id);
 
 /*
-  Enable Realtime:将表加入 Supabase Realtime 发布集：启用实时数据同步
-  这允许客户端订阅和接收表中的实时更新
-  将 shared_documents 表加入该发布集后，表的 INSERT/UPDATE/DELETE 操作会被 Realtime 捕获，
-  前端可通过 WebSocket 实时监听变更（比如之前你问的 postgres_changes 事件）
+  Enable Realtime: add this table to the Supabase Realtime publication to turn on live data sync.
+  This allows clients to subscribe to and receive real-time updates from the table.
+  After adding the shared_documents table to the publication, INSERT/UPDATE/DELETE operations
+  on this table will be captured by Supabase Realtime, and the frontend can listen to changes
+  over WebSocket (for example via postgres_changes events).
 */
 alter publication supabase_realtime add table public.shared_documents;
 

@@ -13,7 +13,7 @@ type DashboardLayoutProps = {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { isAuthenticated, isLoading, userProfile, signOut } = useAuth();
 
-  // 加载中或未登录，显示登录表单
+  // While loading auth state or when unauthenticated, show the auth form
   if (isLoading || !isAuthenticated) {
     return <AuthForm />;
   }

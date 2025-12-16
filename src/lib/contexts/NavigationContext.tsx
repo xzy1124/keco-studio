@@ -30,7 +30,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
     const fetchNames = async () => {
-      // project name
+      // Resolve current project name
       if (currentProjectId) {
         const { data, error } = await supabase
           .from('projects')
@@ -44,7 +44,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
         setProjectName(null);
       }
 
-      // library name
+      // Resolve current library name
       if (currentLibraryId) {
         const { data, error } = await supabase
           .from('libraries')
@@ -64,11 +64,9 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     };
   }, [currentProjectId, currentLibraryId, supabase]);
 
-  // 从路由参数构建面包屑
+  // Build breadcrumbs from current route params
   const buildBreadcrumbs = (): BreadcrumbItem[] => {
     const breadcrumbs: BreadcrumbItem[] = [];
-    
-    breadcrumbs.push({ label: 'Home', path: '/' });
 
     if (currentProjectId) {
       breadcrumbs.push({
