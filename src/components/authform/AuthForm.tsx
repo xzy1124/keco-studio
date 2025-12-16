@@ -230,6 +230,7 @@ export default function AuthForm() {
                   required
                 />
               </label>
+              {errorMsg ? <div className={styles.error}>{errorMsg}</div> : null}
               <button type="submit" className={`${styles.submit} ${styles.submitRegister}`} disabled={loading}>
                 {loading ? "Registering..." : "Register"}
               </button>
