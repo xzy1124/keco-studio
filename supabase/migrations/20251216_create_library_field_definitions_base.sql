@@ -1,4 +1,4 @@
--- Create table to store library-level field definitions (schema / table headers)
+-- Ensure library_field_definitions exists before assets/values migrations run
 create table if not exists public.library_field_definitions (
   id uuid primary key default gen_random_uuid(),
   library_id uuid not null references public.libraries(id) on delete cascade,
@@ -18,7 +18,6 @@ create index if not exists idx_library_field_definitions_library_id
 create index if not exists idx_library_field_definitions_order
   on public.library_field_definitions(library_id, section, order_index);
 
--- RLS: allow authenticated users basic CRUD (adjust as needed for multi-tenant rules)
 alter table public.library_field_definitions enable row level security;
 
 do $$
