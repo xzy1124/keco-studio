@@ -329,6 +329,11 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     }
   };
 
+  const handleAddAssetClick = () => {
+    if (!currentIds.projectId || !currentIds.libraryId) return;
+    router.push(`/${currentIds.projectId}/${currentIds.libraryId}/asset/new`);
+  };
+
   const handleProjectDelete = async (projectId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm('Delete this project? All libraries under it will be removed.')) return;
@@ -435,15 +440,34 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
 
         <div className={styles.sectionTitle}>
           <span>Libraries</span>
-          <button
-            className={styles.addButton}
-            onClick={() => setShowLibraryModal(true)}
-            disabled={!currentIds.projectId}
-            title={currentIds.projectId ? "New Library" : "Select a project first"}
-            aria-label={currentIds.projectId ? "New Library" : "Select a project first"}
-          >
-            +
-          </button>
+          <div className={styles.sectionActions}>
+            <button
+              className={styles.addButton}
+              onClick={() => setShowLibraryModal(true)}
+              disabled={!currentIds.projectId}
+              title={currentIds.projectId ? "New Library" : "Select a project first"}
+              aria-label={currentIds.projectId ? "New Library" : "Select a project first"}
+            >
+              +
+            </button>
+            <button
+              className={styles.addButton}
+              onClick={handleAddAssetClick}
+              disabled={!currentIds.projectId || !currentIds.libraryId}
+              title={
+                currentIds.projectId && currentIds.libraryId
+                  ? "Add new asset to current library"
+                  : "Select a library first"
+              }
+              aria-label={
+                currentIds.projectId && currentIds.libraryId
+                  ? "Add new asset to current library"
+                  : "Select a library first"
+              }
+            >
+              Add asset
+            </button>
+          </div>
         </div>
         {loadingLibraries && <div className={styles.hint}>Loading libraries...</div>}
         <div className={styles.sectionList}>

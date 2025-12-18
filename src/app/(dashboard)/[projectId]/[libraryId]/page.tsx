@@ -260,7 +260,7 @@ export default function LibraryPage() {
 
       {!userProfile && <div className={styles.authWarning}>Please sign in to edit.</div>}
 
-      {userProfile && (
+      {/* {userProfile && (
         <div className={styles.formContainer}>
           <div className={styles.inputRow}>
             <input
@@ -342,7 +342,7 @@ export default function LibraryPage() {
             ))}
           </div>
         </div>
-      )}
+      )} */}
     </div>
   );
 }
