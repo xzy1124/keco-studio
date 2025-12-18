@@ -5,6 +5,18 @@ import { useParams } from 'next/navigation';
 import { useSupabase } from '@/lib/SupabaseContext';
 import { getProject, Project } from '@/lib/services/projectService';
 import { getLibrary, Library } from '@/lib/services/libraryService';
+import LibraryAssetsTable from '@/components/libraries/LibraryAssetsTable';
+import {
+  AssetRow,
+  LibrarySummary,
+  PropertyConfig,
+  SectionConfig,
+} from '@/lib/types/libraryAssets';
+import {
+  getLibraryAssetsWithProperties,
+  getLibrarySchema,
+  getLibrarySummary,
+} from '@/lib/services/libraryAssetsService';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import styles from './page.module.css';
 
@@ -36,6 +48,12 @@ export default function LibraryPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+
+  // Phase 2: state for Library assets table view (placeholder data, wired via service layer)
+  const [librarySummary, setLibrarySummary] = useState<LibrarySummary | null>(null);
+  const [tableSections, setTableSections] = useState<SectionConfig[]>([]);
+  const [tableProperties, setTableProperties] = useState<PropertyConfig[]>([]);
+  const [assetRows, setAssetRows] = useState<AssetRow[]>([]);
 
   const sections = useMemo(() => {
     const map: Record<string, FieldDef[]> = {};
@@ -86,7 +104,21 @@ export default function LibraryPage() {
         
         setProject(projectData);
         setLibrary(libraryData);
+
+        // Existing form: keep definitions loading for now
         await fetchDefinitions();
+
+        // Phase 2: wire Library assets table using placeholder service implementations.
+        const [summary, schema, rows] = await Promise.all([
+          getLibrarySummary(supabase, libraryId),
+          getLibrarySchema(supabase, libraryId),
+          getLibraryAssetsWithProperties(supabase, libraryId),
+        ]);
+
+        setLibrarySummary(summary);
+        setTableSections(schema.sections);
+        setTableProperties(schema.properties);
+        setAssetRows(rows);
       } catch (e: any) {
         setError(e?.message || 'Failed to load library');
       } finally {
@@ -192,6 +224,28 @@ export default function LibraryPage() {
           字段数：{fieldDefs.length} | 分区：{Object.keys(sections).length}
         </div>
       </div>
+
+      {/* Phase 2: Library assets table preview (placeholder data).
+          Later phases will replace placeholder service logic with real Supabase-backed data
+          and upgrade the table to a two-level header that mirrors predefine + Figma. */}
+      <LibraryAssetsTable
+        library={
+          librarySummary
+            ? {
+                id: librarySummary.id,
+                name: librarySummary.name,
+                description: librarySummary.description,
+              }
+            : {
+                id: library.id,
+                name: library.name,
+                description: library.description,
+              }
+        }
+        sections={tableSections}
+        properties={tableProperties}
+        rows={assetRows}
+      />
 
       {saveError && (
         <div className={styles.saveError}>
