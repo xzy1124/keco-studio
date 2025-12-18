@@ -10,3 +10,27 @@
   color: #94a3b8;
 }
 
+.headerRow {
+  display: grid;
+  grid-template-columns: auto 1fr 160px 80px;
+  align-items: center;
+  padding: 0 16px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #9ca3af;
+}
+
+.headerLabel {
+  grid-column: 2 / 3;
+}
+
+.headerDataType {
+  grid-column: 3 / 4;
+  text-align: left;
+}
+
+.headerActions {
+  grid-column: 4 / 5;
+}
+

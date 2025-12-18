@@ -4,11 +4,13 @@ import Image from 'next/image';
 import type { FieldConfig } from '../types';
 import { fieldSchema } from '../validation';
 import { uid } from '../types';
-import { SectionHeader } from './SectionHeader';
 import { FieldsList } from './FieldsList';
 import { FieldForm } from './FieldForm';
 import predefineLabelAddIcon from '@/app/assets/images/predefineLabelAddIcon.svg';
+import predefineDragIcon from '@/app/assets/images/predefineDragIcon.svg';
 import styles from './NewSectionForm.module.css';
+import sectionHeaderStyles from './SectionHeader.module.css';
+import predefineExpandIcon from '@/app/assets/images/predefineExpandIcon.svg';
 
 interface NewSectionFormProps {
   onCancel: () => void;
@@ -19,8 +21,6 @@ interface NewSectionFormProps {
 export function NewSectionForm({ onCancel, onSave, saving }: NewSectionFormProps) {
   const [sectionName, setSectionName] = useState('');
   const [fields, setFields] = useState<FieldConfig[]>([]);
-  const [draftField, setDraftField] = useState<Omit<FieldConfig, 'id'> | null>(null);
-  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
 
   const handleAddField = (fieldData: Omit<FieldConfig, 'id'>) => {
@@ -30,39 +30,24 @@ export function NewSectionForm({ onCancel, onSave, saving }: NewSectionFormProps
       return;
     }
 
-    if (editingFieldId) {
-      setFields((prev) =>
-        prev.map((f) => (f.id === editingFieldId ? { ...f, ...parsed.data } : f))
-      );
-      setEditingFieldId(null);
-    } else {
-      const field: FieldConfig = {
-        id: uid(),
-        ...parsed.data,
-      };
+    const field: FieldConfig = { id: uid(), ...parsed.data };
       setFields((prev) => [...prev, field]);
-    }
-    setDraftField(null);
     setErrors([]);
-  };
-
-  const handleEditField = (field: FieldConfig) => {
-    setEditingFieldId(field.id);
-    setDraftField({
-      label: field.label,
-      dataType: field.dataType,
-      required: field.required,
-      enumOptions: field.enumOptions,
-    });
   };
 
   const handleDeleteField = (fieldId: string) => {
     setFields((prev) => prev.filter((f) => f.id !== fieldId));
   };
 
-  const handleCancelEdit = () => {
-    setDraftField(null);
-    setEditingFieldId(null);
+  const handleChangeField = (fieldId: string, fieldData: Omit<FieldConfig, 'id'>) => {
+    const parsed = fieldSchema.safeParse(fieldData);
+    if (!parsed.success) {
+      setErrors(parsed.error.issues.map((i) => i.message));
+      return;
+    }
+
+    setFields((prev) => prev.map((f) => (f.id === fieldId ? { ...f, ...parsed.data } : f)));
+    setErrors([]);
   };
 
   const handleSave = async () => {
@@ -84,42 +69,53 @@ export function NewSectionForm({ onCancel, onSave, saving }: NewSectionFormProps
   return (
     <div>
       <div className={styles.newSectionContainer}>
-        <SectionHeader
-          sectionName={sectionName}
-          isEditing
-          onNameChange={(name) => {
-            setSectionName(name);
-            setErrors([]);
-          }}
-        />
+        <div className={sectionHeaderStyles.generalSection}>
+          <div>
+            <div>
+              <Image src={predefineExpandIcon} alt="expand" width={16} height={16} style={{ paddingTop: 3 }}/>
+              <span className={sectionHeaderStyles.generalLabel}>General</span>
+            </div>
+            <div className={sectionHeaderStyles.lineSeparator}></div>
+            <div className={sectionHeaderStyles.sectionNameContainer}>
+              <div className={sectionHeaderStyles.dragHandle}>
+                <Image src={predefineDragIcon} alt="Drag" width={16} height={16} />
+              </div>
+              <Input
+                placeholder="Enter section name"
+                value={sectionName}
+                onChange={(e) => {
+                  setSectionName(e.target.value);
+                  setErrors([]);
+                }}
+                className={sectionHeaderStyles.sectionNameInput}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className={styles.newSectionContainer}>
-        <h3 className={styles.sectionTitle}>Pre-define property</h3>
+        <div>
+          <Image src={predefineExpandIcon} alt="expand" width={16} height={16} style={{ paddingTop: 3 }}/>
+          <span className={styles.sectionTitle}>Pre-define property</span>
+        </div>
+        <div className={sectionHeaderStyles.lineSeparator}></div>
+        <div className={styles.headerRow}>
+          <div className={styles.headerLabel}>Label text</div>
+          <div className={styles.headerDataType}>Data type</div>
+          <div className={styles.headerActions} />
+        </div>
         <FieldsList
           fields={fields}
-          onEditField={handleEditField}
+          onChangeField={handleChangeField}
           onDeleteField={handleDeleteField}
+          disabled={saving}
         />
-        {draftField || editingFieldId ? (
-          <FieldForm
-            initialField={draftField || undefined}
-            onSubmit={handleAddField}
-            onCancel={handleCancelEdit}
-            disabled={saving}
-          />
-        ) : (
-          <div className={styles.addFieldTrigger}>
-            <Button
-              type="dashed"
-              icon={<Image src={predefineLabelAddIcon} alt="Add" width={20} height={20} />}
-              onClick={() => setDraftField({ label: '', dataType: 'string', required: false, enumOptions: [] })}
-              disabled={saving}
-            >
-              Add Field
-            </Button>
-          </div>
-        )}
+        <FieldForm
+          onSubmit={handleAddField}
+          onCancel={onCancel}
+          disabled={saving}
+        />
       </div>
 
       {errors.length > 0 && (

@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { Input, Select, Button } from 'antd';
+import { useState, useEffect, useRef } from 'react';
+import { Input, Button } from 'antd';
 import Image from 'next/image';
 import type { FieldConfig, FieldType } from '../types';
-import { FIELD_TYPE_OPTIONS } from '../utils';
+import { FIELD_TYPE_OPTIONS, getFieldTypeIcon } from '../utils';
 import predefineLabelAddIcon from '@/app/assets/images/predefineLabelAddIcon.svg';
-import predefineItemIcon from '@/app/assets/images/predefineItemIcon.svg';
+import predefineDragIcon from '@/app/assets/images/predefineDragIcon.svg';
 import styles from './FieldForm.module.css';
 
 interface FieldFormProps {
@@ -23,10 +23,17 @@ export function FieldForm({ initialField, onSubmit, onCancel, disabled }: FieldF
       enumOptions: [],
     }
   );
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  // 是否已经通过 slash 选择过 data type，用来控制占位符显示
+  const [dataTypeSelected, setDataTypeSelected] = useState(!!initialField);
+  const inputRef = useRef<any>(null);
+  const dataTypeInputRef = useRef<any>(null);
+  const slashMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (initialField) {
       setField(initialField);
+      setDataTypeSelected(true);
     } else {
       // Reset form when initialField becomes null/undefined
       setField({
@@ -35,8 +42,27 @@ export function FieldForm({ initialField, onSubmit, onCancel, disabled }: FieldF
         required: false,
         enumOptions: [],
       });
+      setDataTypeSelected(false);
     }
   }, [initialField]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        slashMenuRef.current &&
+        !slashMenuRef.current.contains(event.target as Node) &&
+        dataTypeInputRef.current &&
+        !dataTypeInputRef.current.input?.contains(event.target as Node)
+      ) {
+        setShowSlashMenu(false);
+      }
+    };
+
+    if (showSlashMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSlashMenu]);
 
   const handleSubmit = () => {
     const payload = {
@@ -56,36 +82,110 @@ export function FieldForm({ initialField, onSubmit, onCancel, disabled }: FieldF
         enumOptions: [],
       });
     }
+    setShowSlashMenu(false);
+  };
+
+  const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setField((p) => ({ ...p, label: value }));
+  };
+
+  const handleSlashMenuSelect = (dataType: FieldType) => {
+    setField((p) => ({
+      ...p,
+      dataType,
+      enumOptions: dataType === 'enum' ? p.enumOptions ?? [] : undefined,
+    }));
+    setDataTypeSelected(true);
+    setShowSlashMenu(false);
+    // Focus back on data type input
+    setTimeout(() => {
+      if (dataTypeInputRef.current) {
+        dataTypeInputRef.current.focus();
+      }
+    }, 0);
+  };
+
+  const handleDataTypeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === '/') {
+      e.preventDefault();
+      setShowSlashMenu(true);
+    }
+  };
+
+  const getDataTypeLabel = (value: FieldType) => {
+    const option = FIELD_TYPE_OPTIONS.find((opt) => opt.value === value);
+    return option?.label ?? '';
   };
 
   const isEditing = !!initialField;
 
   return (
     <div className={`${styles.addFieldContainer} ${disabled ? styles.disabled : ''}`}>
-      <div style={{ cursor: 'grab', display: 'flex', alignItems: 'center' }}>
-        <Image src={predefineItemIcon} alt="Drag" width={16} height={16} />
+      <button 
+        className={styles.addButton} 
+        onClick={handleSubmit}
+        disabled={!field.label.trim() || disabled}
+        title="Add property"
+      >
+        <Image src={predefineLabelAddIcon} alt="Add" width={20} height={20} />
+      </button>
+      <div className={styles.dragHandle}>
+        <Image src={predefineDragIcon} alt="Drag" width={16} height={16} />
       </div>
-      <Input
-        placeholder="Label"
-        value={field.label}
-        onChange={(e) => setField((p) => ({ ...p, label: e.target.value }))}
-        style={{ flex: 1 }}
-        onPressEnter={handleSubmit}
-        disabled={disabled}
-      />
-      <Select
-        value={field.dataType}
-        onChange={(value) =>
-          setField((p) => ({
-            ...p,
-            dataType: value as FieldType,
-            enumOptions: value === 'enum' ? p.enumOptions ?? [] : undefined,
-          }))
-        }
-        style={{ width: 120 }}
-        options={FIELD_TYPE_OPTIONS}
-        disabled={disabled}
-      />
+      <div className={styles.inputWrapper}>
+        <Input
+          ref={inputRef}
+          placeholder="Type label for property..."
+          value={field.label}
+          onChange={handleLabelChange}
+          className={styles.labelInput}
+          onPressEnter={handleSubmit}
+          disabled={disabled}
+        />
+      </div>
+      <div className={styles.dataTypeDisplay}>
+        <Input
+          ref={dataTypeInputRef}
+          placeholder="/ Slash Action..."
+          value={dataTypeSelected ? getDataTypeLabel(field.dataType) : ''}
+          readOnly
+          onKeyDown={handleDataTypeKeyDown}
+          className={styles.dataTypeInput}
+          disabled={disabled}
+          prefix={
+            dataTypeSelected ? (
+              <Image
+                src={getFieldTypeIcon(field.dataType)}
+                alt={field.dataType}
+                width={16}
+                height={16}
+              />
+            ) : undefined
+          }
+        />
+        {showSlashMenu && (
+          <div ref={slashMenuRef} className={styles.slashMenu}>
+            <div className={styles.slashMenuHeader}>Data Type</div>
+            {FIELD_TYPE_OPTIONS.map((option) => (
+              <div
+                key={option.value}
+                className={styles.slashMenuItem}
+                onClick={() => handleSlashMenuSelect(option.value as FieldType)}
+              >
+                <Image
+                  src={getFieldTypeIcon(option.value as FieldType)}
+                  alt={option.value}
+                  width={16}
+                  height={16}
+                  style={{ marginRight: 8 }}
+                />
+                {option.label}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       {field.dataType === 'enum' && (
         <Input
           placeholder="Enum options (comma separated)"
@@ -99,23 +199,17 @@ export function FieldForm({ initialField, onSubmit, onCancel, disabled }: FieldF
                 .filter((v) => v.length > 0),
             }))
           }
-          style={{ width: 200 }}
+          className={styles.enumInput}
           disabled={disabled}
         />
       )}
-      <Button
-        type="primary"
-        icon={<Image src={predefineLabelAddIcon} alt="Add" width={24} height={24} />}
-        onClick={handleSubmit}
-        disabled={!field.label.trim() || disabled}
-      >
-        {isEditing ? 'Update Field' : 'Add Field'}
-      </Button>
-      {isEditing && onCancel && (
-        <Button onClick={onCancel} style={{ marginLeft: 8 }} disabled={disabled}>
-          Cancel
-        </Button>
-      )}
+      <div className={styles.actions}>
+        {isEditing && onCancel && (
+          <Button onClick={onCancel} className={styles.cancelButton} disabled={disabled}>
+            Cancel
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

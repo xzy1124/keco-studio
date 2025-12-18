@@ -10,15 +10,21 @@ import Image from 'next/image';
 import predefineLabelAddIcon from '@/app/assets/images/predefineLabelAddIcon.svg';
 import predefineLabelDelIcon from '@/app/assets/images/predefineLabelDelIcon.svg';
 import type { SectionConfig, FieldConfig } from './types';
+import type { Library } from '@/lib/services/libraryService';
+import { getLibrary } from '@/lib/services/libraryService';
 import { sectionSchema } from './validation';
 import { uid } from './types';
 import { useSchemaData } from './hooks/useSchemaData';
 import { saveSchemaIncremental } from './hooks/useSchemaSave';
-import { SectionHeader } from './components/SectionHeader';
 import { FieldsList } from './components/FieldsList';
 import { FieldForm } from './components/FieldForm';
 import { NewSectionForm } from './components/NewSectionForm';
 import styles from './page.module.css';
+import sectionHeaderStyles from './components/SectionHeader.module.css';
+import predefineDragIcon from '@/app/assets/images/predefineDragIcon.svg';
+import predefineExpandIcon from '@/app/assets/images/predefineExpandIcon.svg';
+
+const NEW_SECTION_TAB_KEY = '__new_section__';
 
 export default function PredefinePage() {
   const supabase = useSupabase();
@@ -31,8 +37,7 @@ export default function PredefinePage() {
   });
 
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
-  const [draftField, setDraftField] = useState<Omit<FieldConfig, 'id'> | null>(null);
-  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [library, setLibrary] = useState<Library | null>(null);
   const [isCreatingNewSection, setIsCreatingNewSection] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -41,6 +46,23 @@ export default function PredefinePage() {
     () => sections.find((s) => s.id === activeSectionId) || null,
     [sections, activeSectionId]
   );
+
+  // 加载当前 library 信息（名称、描述），用于页面标题显示
+  useEffect(() => {
+    if (!libraryId) return;
+
+    const fetchLibrary = async () => {
+      try {
+        const lib = await getLibrary(supabase, libraryId);
+        setLibrary(lib);
+      } catch (e) {
+        // 仅用于标题展示，失败时忽略即可
+        console.error('Failed to load library info', e);
+      }
+    };
+
+    fetchLibrary();
+  }, [libraryId, supabase]);
 
   // Set first section as active when sections load or when activeSectionId becomes invalid
   useEffect(() => {
@@ -54,11 +76,6 @@ export default function PredefinePage() {
       setActiveSectionId(null);
     }
   }, [sections, activeSectionId]);
-
-  const resetField = () => {
-    setDraftField(null);
-    setEditingFieldId(null);
-  };
 
   const startCreatingNewSection = () => {
     setIsCreatingNewSection(true);
@@ -87,11 +104,14 @@ export default function PredefinePage() {
       )
     );
     setActiveSectionId(sectionId);
-    resetField();
     setErrors([]);
   };
 
-  const handleUpdateField = (sectionId: string, fieldId: string, fieldData: Omit<FieldConfig, 'id'>) => {
+  const handleChangeField = (
+    sectionId: string,
+    fieldId: string,
+    fieldData: Omit<FieldConfig, 'id'>
+  ) => {
     setSections((prev) =>
       prev.map((s) =>
         s.id === sectionId
@@ -102,19 +122,7 @@ export default function PredefinePage() {
           : s
       )
     );
-    resetField();
     setErrors([]);
-  };
-
-  const handleEditField = (sectionId: string, field: FieldConfig) => {
-    setActiveSectionId(sectionId);
-    setEditingFieldId(field.id);
-    setDraftField({
-      label: field.label,
-      dataType: field.dataType,
-      required: field.required,
-      enumOptions: field.enumOptions,
-    });
   };
 
   const handleDeleteField = (sectionId: string, fieldId: string) => {
@@ -255,45 +263,73 @@ export default function PredefinePage() {
     }
   };
 
-  const handleFieldFormSubmit = (fieldData: Omit<FieldConfig, 'id'>) => {
-    if (!activeSectionId) {
-      message.error('Please select a section first');
-      return;
-    }
-
-    if (editingFieldId) {
-      handleUpdateField(activeSectionId, editingFieldId, fieldData);
-    } else {
-      handleAddField(activeSectionId, fieldData);
-    }
-  };
-
-  const tabItems = sections.map((section): TabsProps['items'][0] => ({
+  const baseTabItems = sections.map((section): TabsProps['items'][0] => ({
     key: section.id,
     label: section.name,
     children: (
       <div className={styles.tabContent}>
-        <div style={{ marginBottom: 16 }}>
-          <SectionHeader sectionName={section.name} />
-          <h3 className={styles.sectionTitle}>Pre-define property</h3>
+        <div>
+          <div className={sectionHeaderStyles.generalSection}>
+            <div>
+              <div>
+                  <Image src={predefineExpandIcon} alt="expand" width={16} height={16} style={{ paddingTop: 3 }}/>
+                  <span className={sectionHeaderStyles.generalLabel}>General</span>
+              </div>
+              <div className={sectionHeaderStyles.lineSeparator}></div>
+              <div className={sectionHeaderStyles.sectionNameContainer}>
+                <div className={sectionHeaderStyles.dragHandle}>
+                  <Image src={predefineDragIcon} alt="Drag" width={16} height={16} />
+                </div>
+                {section.name ? (
+                  <span className={sectionHeaderStyles.sectionNameDisplay}>{section.name}</span>
+                ) : (
+                  <span className={sectionHeaderStyles.noSectionSelected}>No section selected</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div>
+              <Image src={predefineExpandIcon} alt="expand" width={16} height={16} style={{ paddingTop: 3 }}/>
+              <span className={styles.sectionTitle}>Pre-define property</span>
+          </div>
+          <div className={sectionHeaderStyles.lineSeparator}></div>
+          <div className={styles.headerRow}>
+            <div className={styles.headerLabel}>Label text</div>
+            <div className={styles.headerDataType}>Data type</div>
+            <div className={styles.headerActions} />
+          </div>
         </div>
         <FieldsList
           fields={section.fields}
-          onEditField={(field) => handleEditField(section.id, field)}
+          onChangeField={(fieldId, data) => handleChangeField(section.id, fieldId, data)}
           onDeleteField={(fieldId) => handleDeleteField(section.id, fieldId)}
+          disabled={saving}
         />
         <FieldForm
-          initialField={editingFieldId && draftField ? draftField : undefined}
-          onSubmit={handleFieldFormSubmit}
-          onCancel={() => {
-            resetField();
-            setActiveSectionId(section.id);
-          }}
+          onSubmit={(data) => handleAddField(section.id, data)}
           disabled={saving}
         />
       </div>
     ),
   }));
+
+  const tabItems: TabsProps['items'] = [...baseTabItems];
+
+  if (sections.length > 0 && isCreatingNewSection) {
+    tabItems.push({
+      key: NEW_SECTION_TAB_KEY,
+      label: 'New section',
+      children: (
+        <div className={styles.tabContent}>
+          <NewSectionForm
+            onCancel={cancelCreatingNewSection}
+            onSave={handleSaveNewSection}
+            saving={saving}
+          />
+        </div>
+      ),
+    });
+  }
 
   return (
     <ConfigProvider
@@ -314,8 +350,12 @@ export default function PredefinePage() {
         <div className={styles.contentWrapper}>
           <div className={styles.header}>
             <div>
-              <h1 className={styles.title}>Predefine seedcrop Library...</h1>
-              <p className={styles.subtitle}>here is the land description for this library</p>
+              <h1 className={styles.title}>
+                {`Predefine ${library?.name ?? ''} Library`}
+              </h1>
+              {library?.description && (
+                <p className={styles.subtitle}>{library.description}</p>
+              )}
             </div>
           </div>
 
@@ -327,78 +367,86 @@ export default function PredefinePage() {
             </div>
           )}
 
-          {isCreatingNewSection ? (
-            <NewSectionForm
-              onCancel={cancelCreatingNewSection}
-              onSave={handleSaveNewSection}
-              saving={saving}
-            />
-          ) : (
-            <>
-              <div className={styles.tabsContainer}>
-                {sections.length > 0 ? (
-                  <>
-                    <Tabs
-                      activeKey={activeSectionId || undefined}
-                      onChange={(key) => {
+          <>
+            <div className={styles.tabsContainer}>
+              {sections.length > 0 ? (
+                <>
+                  <Tabs
+                    activeKey={
+                      isCreatingNewSection
+                        ? NEW_SECTION_TAB_KEY
+                        : activeSectionId || undefined
+                    }
+                    onChange={(key) => {
+                      if (key === NEW_SECTION_TAB_KEY) {
+                        startCreatingNewSection();
+                      } else {
+                        setIsCreatingNewSection(false);
                         setActiveSectionId(key);
-                        resetField();
-                      }}
-                      items={tabItems}
-                    />
-                    <Button
-                      type="primary"
-                      icon={<Image src={predefineLabelAddIcon} alt="Add" width={20} height={20} />}
-                      onClick={startCreatingNewSection}
-                      className={styles.addSectionButton}
-                    >
-                      Add Section
-                    </Button>
-                  </>
-                ) : (
-                  <div className={styles.emptySectionsContainer}>
-                    <div className={styles.emptySectionsMessage}>
-                      No sections yet. Add a section to get started.
-                    </div>
-                    <Button
-                      type="primary"
-                      icon={<Image src={predefineLabelAddIcon} alt="Add" width={20} height={20} />}
-                      onClick={startCreatingNewSection}
-                      className={styles.saveButton}
-                    >
-                      Add Section
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {sections.length > 0 && (
-                <div className={styles.saveButtonContainer}>
-                  {activeSectionId && (
-                    <Button
-                      danger
-                      size="large"
-                      icon={<Image src={predefineLabelDelIcon} alt="Delete" width={20} height={20} />}
-                      onClick={() => handleDeleteSection(activeSectionId)}
-                      loading={saving}
-                      className={styles.deleteButton}
-                    >
-                      Delete Section
-                    </Button>
-                  )}
+                      }
+                    }}
+                    items={tabItems}
+                  />
                   <Button
                     type="primary"
-                    size="large"
-                    onClick={() => saveSchema()}
-                    loading={saving}
+                    icon={<Image src={predefineLabelAddIcon} alt="Add" width={20} height={20} />}
+                    onClick={startCreatingNewSection}
+                    className={styles.addSectionButton}
+                  >
+                    Add Section
+                  </Button>
+                </>
+              ) : isCreatingNewSection ? (
+                <NewSectionForm
+                  onCancel={cancelCreatingNewSection}
+                  onSave={handleSaveNewSection}
+                  saving={saving}
+                />
+              ) : (
+                <div className={styles.emptySectionsContainer}>
+                  <div className={styles.emptySectionsMessage}>
+                    No sections yet. Add a section to get started.
+                  </div>
+                  <Button
+                    type="primary"
+                    icon={<Image src={predefineLabelAddIcon} alt="Add" width={20} height={20} />}
+                    onClick={startCreatingNewSection}
                     className={styles.saveButton}
                   >
-                    {saving ? 'Saving...' : 'Save Schema'}
+                    Add Section
                   </Button>
                 </div>
               )}
-            </>
-          )}
+            </div>
+
+            {sections.length > 0 && (
+              <div className={styles.saveButtonContainer}>
+                {activeSectionId && !isCreatingNewSection && (
+                  <Button
+                    type="primary"
+                    size="large"
+                    // icon={
+                    //   <Image src={predefineLabelDelIcon} alt="Delete" width={20} height={20} />
+                    // }
+                    onClick={() => handleDeleteSection(activeSectionId)}
+                    loading={saving}
+                    className={styles.deleteButton}
+                  >
+                    Delete Section
+                  </Button>
+                )}
+                <Button
+                  type="primary"
+                  size="large"
+                  onClick={() => saveSchema()}
+                  loading={saving}
+                  className={styles.saveButton}
+                >
+                  {saving ? 'Saving...' : 'Save Schema'}
+                </Button>
+              </div>
+            )}
+          </>
         </div>
       </div>
     </ConfigProvider>

@@ -5,8 +5,14 @@
 .generalLabel {
   font-weight: 500;
   font-size: 14px;
-  color: #64748b;
   min-width: 60px;
+}
+
+.lineSeparator {
+  width: 100%;
+  height: 1px;
+  background: #e5e7eb;
+  margin: 8px 0;
 }
 
 .sectionNameContainer {
@@ -14,6 +20,7 @@
   align-items: flex-start;
   gap: 8px;
   padding: 6px 12px;
+  padding-left: 40px;
   background: #fff;
 }
 

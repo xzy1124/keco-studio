@@ -8,3 +8,4 @@ alter publication supabase_realtime add table public.predefine_properties;
 
 
 
+

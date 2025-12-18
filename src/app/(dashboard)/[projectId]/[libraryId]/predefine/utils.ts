@@ -3,16 +3,26 @@ import predefineTypeStrIcon from '@/app/assets/images/predefineTypeStrIcon.svg';
 import predefineTypeIntIcon from '@/app/assets/images/predefineTypeIntIcon.svg';
 import predefineTypeOptIcon from '@/app/assets/images/predefineTypeOptIcon.svg';
 import predefineTypeRefIcon from '@/app/assets/images/predefineTypeRefIcon.svg';
+import predefineTypeMediaIcon from '@/app/assets/images/predefineTypeMediaIcon.svg';
+import predefineTypeBoolenIcon from '@/app/assets/images/predefineTypeBoolenIcon.svg';
+import predefineTypeFloatIcon from '@/app/assets/images/predefineTypeFloatIcon.svg';
 
 export const getFieldTypeIcon = (dataType: FieldType) => {
   switch (dataType) {
     case 'string':
       return predefineTypeStrIcon;
     case 'int':
-    case 'float':
       return predefineTypeIntIcon;
+    case 'float':
+      return predefineTypeFloatIcon;
     case 'enum':
       return predefineTypeOptIcon;
+    case 'reference':
+      return predefineTypeRefIcon;
+    case 'media':
+      return predefineTypeMediaIcon;
+    case 'boolean':
+      return predefineTypeBoolenIcon;
     default:
       return predefineTypeRefIcon;
   }
@@ -20,10 +30,11 @@ export const getFieldTypeIcon = (dataType: FieldType) => {
 
 export const FIELD_TYPE_OPTIONS = [
   { label: 'String', value: 'string' },
+  { label: 'Option', value: 'enum' },
+  { label: 'Media/File', value: 'media' },
+  { label: 'Boolean', value: 'boolean' },
+  { label: 'Reference', value: 'reference' },
   { label: 'Int', value: 'int' },
   { label: 'Float', value: 'float' },
-  { label: 'Boolean', value: 'boolean' },
-  { label: 'Enum', value: 'enum' },
-  { label: 'Date', value: 'date' },
 ] as const;
 

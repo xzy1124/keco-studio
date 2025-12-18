@@ -4,30 +4,29 @@ import styles from './FieldsList.module.css';
 
 interface FieldsListProps {
   fields: FieldConfig[];
-  onEditField: (field: FieldConfig) => void;
+  /** 行内编辑时直接更新字段 */
+  onChangeField: (fieldId: string, data: Omit<FieldConfig, 'id'>) => void;
   onDeleteField: (fieldId: string) => void;
+  disabled?: boolean;
 }
 
-export function FieldsList({ fields, onEditField, onDeleteField }: FieldsListProps) {
+export function FieldsList({ fields, onChangeField, onDeleteField, disabled }: FieldsListProps) {
   if (fields.length === 0) {
-    return (
-      <div className={styles.emptyFields}>
-        No fields yet. Add a field to get started.
-      </div>
-    );
+    return null;
   }
 
   return (
     <div className={styles.fieldsList}>
-      {fields.map((field) => (
+      {fields.map((field, index) => (
         <FieldItem
           key={field.id}
           field={field}
-          onEdit={onEditField}
+          onChangeField={onChangeField}
           onDelete={onDeleteField}
+          isFirst={index === 0}
+          disabled={disabled}
         />
       ))}
     </div>
   );
 }
-
