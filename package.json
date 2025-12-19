@@ -2,10 +2,6 @@
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/supabase-js": "2.87.1",
-    "@tiptap/extension-image": "2.27.1",
-    "@tiptap/pm": "2.27.1",
-    "@tiptap/react": "2.27.1",
-    "@tiptap/starter-kit": "2.27.1",
     "antd": "^5.22.2",
     "next": "16.0.10",
     "react": "19.2.3",
