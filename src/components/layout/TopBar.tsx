@@ -30,6 +30,8 @@ export function TopBar({ breadcrumb = [] }: TopBarProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [assetMode, setAssetMode] = useState<AssetMode>('view');
+  const [isPredefineCreatingNewSection, setIsPredefineCreatingNewSection] = useState(false);
+  const [predefineActiveSectionId, setPredefineActiveSectionId] = useState<string | null>(null);
 
   // Resolve display name: prefer username, then full_name, then email
   const displayName =
@@ -58,6 +60,29 @@ export function TopBar({ breadcrumb = [] }: TopBarProps) {
     setAssetMode('view');
   }, [currentAssetId]);
 
+  // Listen to Predefine page state updates (e.g. creating new section)
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const custom = event as CustomEvent<{ isCreatingNewSection?: boolean; activeSectionId?: string | null }>;
+      if (typeof custom.detail?.isCreatingNewSection === 'boolean') {
+        setIsPredefineCreatingNewSection(custom.detail.isCreatingNewSection);
+      }
+      if (custom.detail?.activeSectionId !== undefined) {
+        setPredefineActiveSectionId(custom.detail.activeSectionId);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('predefine-state', handler as EventListener);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('predefine-state', handler as EventListener);
+      }
+    };
+  }, []);
+
   // Prefer breadcrumbs from NavigationContext; fall back to the prop-based list
   const displayBreadcrumbs =
     breadcrumbs.length > 0 ? breadcrumbs : breadcrumb.map((label) => ({ label, path: '' }));
@@ -81,6 +106,12 @@ export function TopBar({ breadcrumb = [] }: TopBarProps) {
     // Let Predefine page handle actual save via a window event
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('predefine-save'));
+    }
+  };
+
+  const handlePredefineCancelOrDelete = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('predefine-cancel-or-delete'));
     }
   };
 
@@ -111,6 +142,15 @@ export function TopBar({ breadcrumb = [] }: TopBarProps) {
     if (isPredefine) {
       return (
         <>
+          <button
+            className={styles.topbarPillButton}
+            onClick={handlePredefineCancelOrDelete}
+          >
+            <span className={styles.topbarPillIcon}>
+              <Image src={topbarPredefinePublishIcon} alt="Cancel or Delete" width={16} height={16} />
+            </span>
+            <span>{isPredefineCreatingNewSection ? 'Cancel' : 'Delete Section'}</span>
+          </button>
           <button
             className={`${styles.topbarPillButton} ${styles.topbarPillPrimary}`}
             onClick={handlePredefineSave}
@@ -187,7 +227,7 @@ export function TopBar({ breadcrumb = [] }: TopBarProps) {
     <header className={styles.header}>
       <div className={styles.left}>
         <div className={styles.breadcrumb}>
-          <Image src={topBarBreadCrumbIcon} alt="Breadcrumb" width={20} height={20} style={{ marginRight: '5px' }}/>
+          <Image src={topBarBreadCrumbIcon} alt="Breadcrumb" width={20} height={20} style={{ marginRight: '5px' }} />
           {displayBreadcrumbs.map((item, index) => (
             <span key={index}>
               <button

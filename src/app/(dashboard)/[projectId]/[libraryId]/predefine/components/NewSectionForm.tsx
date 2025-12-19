@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button, Input } from 'antd';
 import Image from 'next/image';
 import type { FieldConfig } from '../types';
@@ -85,7 +85,7 @@ export function NewSectionForm({ onCancel, onSave, saving, isFirstSection = fals
     setErrors([]);
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     const trimmedName = sectionName.trim();
     if (!trimmedName) {
       setErrors(['Section name is required']);
@@ -99,7 +99,24 @@ export function NewSectionForm({ onCancel, onSave, saving, isFirstSection = fals
 
     setErrors([]);
     await onSave({ name: trimmedName, fields });
-  };
+  }, [sectionName, fields, onSave]);
+
+  // Listen to top bar "Save" button when creating new section
+  useEffect(() => {
+    const handler = () => {
+      void handleSave();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('predefine-save-new-section', handler);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('predefine-save-new-section', handler);
+      }
+    };
+  }, [handleSave]);
 
   return (
     <div>
@@ -162,18 +179,20 @@ export function NewSectionForm({ onCancel, onSave, saving, isFirstSection = fals
         </div>
       )}
 
-      <div className={styles.newSectionActions}>
+      {/* <div className={styles.newSectionActions}>
         <Button onClick={onCancel} disabled={saving} className={styles.cancelButton}>
           Cancel
         </Button>
         <Button
+          type="primary"
+          size="large"
           onClick={handleSave}
           loading={saving}
           className={styles.saveButton}
         >
           {saving ? 'Saving...' : 'Save Schema'}
         </Button>
-      </div>
+      </div> */}
     </div>
   );
 }

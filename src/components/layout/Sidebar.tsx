@@ -136,7 +136,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     return { projectId, libraryId, folderId };
   }, [pathname]);
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     setLoadingProjects(true);
     setError(null);
     try {
@@ -147,7 +147,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     } finally {
       setLoadingProjects(false);
     }
-  };
+  }, [supabase]);
 
   const fetchFoldersAndLibraries = useCallback(async (projectId?: string | null) => {
     if (!projectId) {
@@ -179,7 +179,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   // - whenever the route changes (e.g. project created from /projects and we navigate to /[projectId])
   useEffect(() => {
     fetchProjects();
-  }, [pathname]);
+  }, [pathname, fetchProjects]);
 
   // 跟踪当前项目ID，用于检测项目切换
   const prevProjectIdRef = useRef<string | null>(null);
@@ -261,16 +261,16 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     fetchAssets(libraryId);
   };
 
-  const handleLibraryPredefineClick = (projectId: string, libraryId: string, e: React.MouseEvent) => {
+  const handleLibraryPredefineClick = useCallback((projectId: string, libraryId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     router.push(`/${projectId}/${libraryId}/predefine`);
-  };
+  }, [router]);
 
   const handleAssetClick = (projectId: string, libraryId: string, assetId: string) => {
     router.push(`/${projectId}/${libraryId}/${assetId}`);
   };
 
-  const handleAssetDelete = async (
+  const handleAssetDelete = useCallback(async (
     assetId: string,
     libraryId: string,
     e: React.MouseEvent
@@ -287,7 +287,29 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     } catch (err) {
       console.error('Failed to delete asset', err);
     }
-  };
+  }, [supabase, fetchAssets]);
+
+  const handleLibraryDelete = useCallback(async (libraryId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this library?')) return;
+    try {
+      await deleteLibrary(supabase, libraryId);
+      fetchFoldersAndLibraries(currentIds.projectId);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete library');
+    }
+  }, [supabase, currentIds.projectId, fetchFoldersAndLibraries]);
+
+  const handleFolderDelete = useCallback(async (folderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this folder? All libraries and subfolders under it will be removed.')) return;
+    try {
+      await deleteFolder(supabase, folderId);
+      fetchFoldersAndLibraries(currentIds.projectId);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete folder');
+    }
+  }, [supabase, currentIds.projectId, fetchFoldersAndLibraries]);
 
   const treeData: DataNode[] = useMemo(() => {
     if (!currentIds.projectId) return [];
@@ -567,7 +589,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     });
 
     return result;
-  }, [folders, libraries, assets, currentIds.projectId, handleLibraryPredefineClick, handleAssetDelete]);
+  }, [folders, libraries, assets, currentIds.projectId, handleLibraryPredefineClick, handleAssetDelete, handleFolderDelete, handleLibraryDelete]);
 
   const selectedKey = useMemo(() => {
     const keys: string[] = [];
@@ -675,28 +697,6 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
       setLibraries([]);
     } catch (err: any) {
       setError(err?.message || 'Failed to delete project');
-    }
-  };
-
-  const handleLibraryDelete = async (libraryId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!window.confirm('Delete this library?')) return;
-    try {
-      await deleteLibrary(supabase, libraryId);
-      fetchFoldersAndLibraries(currentIds.projectId);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to delete library');
-    }
-  };
-
-  const handleFolderDelete = async (folderId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!window.confirm('Delete this folder? All libraries and subfolders under it will be removed.')) return;
-    try {
-      await deleteFolder(supabase, folderId);
-      fetchFoldersAndLibraries(currentIds.projectId);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to delete folder');
     }
   };
 

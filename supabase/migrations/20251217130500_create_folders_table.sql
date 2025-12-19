@@ -157,6 +157,7 @@ declare
   v_name text := trim(p_name);
   v_description text := nullif(trim(p_description), '');
   v_result json;
+  v_user_email text;
 begin
   if v_user is null then
     raise exception 'Unauthorized: auth.uid() is null';
@@ -164,6 +165,15 @@ begin
   if v_name is null or length(v_name) = 0 then
     raise exception 'Project name required';
   end if;
+
+  -- Ensure profile exists for the current user
+  -- Get email from auth.users
+  select email into v_user_email from auth.users where id = v_user;
+  
+  -- Insert profile if it doesn't exist (using on conflict to handle race conditions)
+  insert into public.profiles (id, email, created_at, updated_at)
+  values (v_user, v_user_email, now(), now())
+  on conflict (id) do nothing;
 
   insert into public.projects (owner_id, name, description)
   values (v_user, v_name, v_description)

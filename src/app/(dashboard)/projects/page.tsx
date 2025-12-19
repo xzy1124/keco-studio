@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSupabase } from '@/lib/SupabaseContext';
 import { listProjects, Project } from '@/lib/services/projectService';
@@ -15,7 +15,7 @@ export default function ProjectsPage() {
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -26,11 +26,11 @@ export default function ProjectsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+  }, [fetchProjects]);
 
   const handleCreated = (projectId: string) => {
     fetchProjects();

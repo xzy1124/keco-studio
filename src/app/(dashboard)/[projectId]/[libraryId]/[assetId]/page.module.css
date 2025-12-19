@@ -11,7 +11,7 @@
 
 .container {
   min-height: 100vh;
-  padding: 32px 48px;
+  padding: 24px;
 }
 
 .contentWrapper {
@@ -29,7 +29,7 @@
 .title {
   margin: 0;
   font-size: 32px;
-  font-weight: 600;
+  font-weight: 400;
   color: #111827;
 }
 
@@ -74,7 +74,6 @@
 .formContainer {
   margin-top: 8px;
   border-radius: 10px;
-  padding: 20px 20px 24px;
   background: #fff;
 }
 
@@ -103,14 +102,17 @@
 }
 
 .primaryButton {
-  padding: 8px 16px;
-  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
   border: none;
-  background: #8726ee;
-  color: #fff;
+  background-color: #f5f3ff;
+  color: #4c1d95;
+  font-size: 0.875rem;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
+  transition: background-color 0.2s, box-shadow 0.2s;
 }
 
 .primaryButton:disabled {
@@ -163,7 +165,7 @@
 }
 
 .tabContent {
-  padding: 16px 0 0;
+  padding: 30px 24px 0;
 }
 
 .sectionHeaderRow {

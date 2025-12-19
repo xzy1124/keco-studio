@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSupabase } from '@/lib/SupabaseContext';
 import { getProject, Project } from '@/lib/services/projectService';
@@ -68,7 +68,7 @@ export default function LibraryPage() {
     return map;
   }, [fieldDefs]);
 
-  const fetchDefinitions = async () => {
+  const fetchDefinitions = useCallback(async () => {
     const { data, error } = await supabase
       .from('library_field_definitions')
       .select('*')
@@ -77,7 +77,7 @@ export default function LibraryPage() {
       .order('order_index', { ascending: true });
     if (error) throw error;
     setFieldDefs((data as FieldDef[]) || []);
-  };
+  }, [supabase, libraryId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -127,7 +127,7 @@ export default function LibraryPage() {
     };
 
     fetchData();
-  }, [projectId, libraryId, supabase]);
+  }, [projectId, libraryId, supabase, fetchDefinitions]);
 
   const handleValueChange = (fieldId: string, value: any) => {
     setValues((prev) => ({ ...prev, [fieldId]: value }));
@@ -219,9 +219,6 @@ export default function LibraryPage() {
         <div>
           <h1 className={styles.title}>{library.name}</h1>
           <div className={styles.subtitle}>{library.description}</div>
-        </div>
-        <div className={styles.subtitle}>
-          字段数：{fieldDefs.length} | 分区：{Object.keys(sections).length}
         </div>
       </div>
 
