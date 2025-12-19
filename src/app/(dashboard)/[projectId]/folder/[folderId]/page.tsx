@@ -9,6 +9,10 @@ import { LibraryCard } from '@/components/folders/LibraryCard';
 import { LibraryListView } from '@/components/folders/LibraryListView';
 import { LibraryToolbar } from '@/components/folders/LibraryToolbar';
 import { NewLibraryModal } from '@/components/libraries/NewLibraryModal';
+import libraryEmptyIcon from '@/app/assets/images/libraryEmptyIcon.svg';
+import plusHorizontal from '@/app/assets/images/plusHorizontal.svg';
+import plusVertical from '@/app/assets/images/plusVertical.svg';
+import Image from 'next/image';
 import styles from './FolderPage.module.css';
 
 export default function FolderPage() {
@@ -55,7 +59,7 @@ export default function FolderPage() {
     fetchData();
   }, [fetchData]);
 
-  // Listen for library creation events to refresh the list
+  // Listen for library creation/deletion events to refresh the list
   useEffect(() => {
     const handleLibraryCreated = (event: CustomEvent) => {
       const createdFolderId = event.detail?.folderId;
@@ -65,10 +69,20 @@ export default function FolderPage() {
       }
     };
 
+    const handleLibraryDeleted = (event: CustomEvent) => {
+      const deletedFolderId = event.detail?.folderId;
+      // Only refresh if the library was deleted from the current folder
+      if (deletedFolderId === folderId) {
+        fetchData();
+      }
+    };
+
     window.addEventListener('libraryCreated' as any, handleLibraryCreated as EventListener);
+    window.addEventListener('libraryDeleted' as any, handleLibraryDeleted as EventListener);
     
     return () => {
       window.removeEventListener('libraryCreated' as any, handleLibraryCreated as EventListener);
+      window.removeEventListener('libraryDeleted' as any, handleLibraryDeleted as EventListener);
     };
   }, [folderId, fetchData]);
 
@@ -169,8 +183,42 @@ export default function FolderPage() {
         onViewModeChange={setViewMode}
       />
       {libraries.length === 0 ? (
-        <div className={styles.emptyState}>
-          <div className={styles.emptyText}>No libraries in this folder yet.</div>
+        <div className={styles.emptyStateWrapper}>
+          <div className={styles.emptyStateContainer}>
+            <div className={styles.emptyIcon}>
+              <Image
+                src={libraryEmptyIcon}
+                alt="Library icon"
+                width={72}
+                height={72}
+              />
+            </div>
+            <div className={styles.emptyText}>
+              There is no any library here. you need to create a library firstly
+            </div>
+            <button
+              className={styles.createLibraryButton}
+              onClick={handleCreateLibrary}
+            >
+              <span className={styles.plusIcon}>
+                <Image
+                  src={plusHorizontal}
+                  alt=""
+                  width={17}
+                  height={2}
+                  className={styles.plusHorizontal}
+                />
+                <Image
+                  src={plusVertical}
+                  alt=""
+                  width={2}
+                  height={17}
+                  className={styles.plusVertical}
+                />
+              </span>
+              <span className={styles.buttonText}>Create Library</span>
+            </button>
+          </div>
         </div>
       ) : viewMode === 'grid' ? (
         <div className={styles.grid}>

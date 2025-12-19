@@ -61,7 +61,7 @@ export default function ProjectPage() {
     fetchData();
   }, [fetchData]);
 
-  // Listen for folder and library creation events to refresh the list
+  // Listen for folder and library creation/deletion events to refresh the list
   useEffect(() => {
     const handleFolderCreated = () => {
       fetchData();
@@ -75,14 +75,25 @@ export default function ProjectPage() {
       }
     };
 
+    const handleLibraryDeleted = (event: CustomEvent) => {
+      const deletedFolderId = event.detail?.folderId;
+      const deletedProjectId = event.detail?.projectId;
+      // Only refresh if the library was deleted from root level (no folder) and belongs to current project
+      if (!deletedFolderId && deletedProjectId === projectId) {
+        fetchData();
+      }
+    };
+
     window.addEventListener('folderCreated' as any, handleFolderCreated as EventListener);
     window.addEventListener('libraryCreated' as any, handleLibraryCreated as EventListener);
+    window.addEventListener('libraryDeleted' as any, handleLibraryDeleted as EventListener);
     
     return () => {
       window.removeEventListener('folderCreated' as any, handleFolderCreated as EventListener);
       window.removeEventListener('libraryCreated' as any, handleLibraryCreated as EventListener);
+      window.removeEventListener('libraryDeleted' as any, handleLibraryDeleted as EventListener);
     };
-  }, [fetchData]);
+  }, [fetchData, projectId]);
 
   const handleFolderClick = (folderId: string) => {
     router.push(`/${projectId}/folder/${folderId}`);

@@ -10,14 +10,17 @@ import homeMorehorizontalIcon from "@/app/assets/images/homeMorehorizontalIcon.s
 import homeQuestionIcon from "@/app/assets/images/homeQuestionIcon.svg";
 import homeMessageIcon from "@/app/assets/images/loginMessageIcon.svg";
 import homeDefaultUserIcon from "@/app/assets/images/homeDefaultUserIcon.svg";
+import menuIcon from "@/app/assets/images/menuIcon36.svg";
 
 type TopBarProps = {
   breadcrumb?: string[];
+  showCreateProjectBreadcrumb?: boolean;
 };
 
-export function TopBar({ breadcrumb = [] }: TopBarProps) {
+export function TopBar({ breadcrumb = [], showCreateProjectBreadcrumb: propShowCreateProjectBreadcrumb }: TopBarProps) {
   const router = useRouter();
-  const { breadcrumbs } = useNavigation();
+  const { breadcrumbs, showCreateProjectBreadcrumb: contextShowCreateProjectBreadcrumb } = useNavigation();
+  const showCreateProjectBreadcrumb = propShowCreateProjectBreadcrumb ?? contextShowCreateProjectBreadcrumb;
   const { userProfile, signOut } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -61,22 +64,29 @@ export function TopBar({ breadcrumb = [] }: TopBarProps) {
   return (
     <header className={styles.header}>
       <div className={styles.left}>
-        <div className={styles.breadcrumb}>
-          {displayBreadcrumbs.map((item, index) => (
-            <span key={index}>
-              <button
-                className={`${styles.breadcrumbItem} ${
-                  index === displayBreadcrumbs.length - 1 ? styles.breadcrumbItemActive : styles.breadcrumbItemClickable
-                }`}
-                onClick={() => handleBreadcrumbClick(item.path, index)}
-                disabled={index === displayBreadcrumbs.length - 1}
-              >
-                {item.label}
-              </button>
-              {index < displayBreadcrumbs.length - 1 && <span className={styles.breadcrumbSeparator}> / </span>}
-            </span>
-          ))}
-        </div>
+        {showCreateProjectBreadcrumb ? (
+          <div className={styles.createProjectBreadcrumb}>
+            <Image src={menuIcon} alt="Menu" width={36} height={48} className={styles.menuIcon} />
+            <span className={styles.createProjectText}>Create Project</span>
+          </div>
+        ) : (
+          <div className={styles.breadcrumb}>
+            {displayBreadcrumbs.map((item, index) => (
+              <span key={index}>
+                <button
+                  className={`${styles.breadcrumbItem} ${
+                    index === displayBreadcrumbs.length - 1 ? styles.breadcrumbItemActive : styles.breadcrumbItemClickable
+                  }`}
+                  onClick={() => handleBreadcrumbClick(item.path, index)}
+                  disabled={index === displayBreadcrumbs.length - 1}
+                >
+                  {item.label}
+                </button>
+                {index < displayBreadcrumbs.length - 1 && <span className={styles.breadcrumbSeparator}> / </span>}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div className={styles.right}>
         <button className={`${styles.button} ${styles.buttonText}`}>

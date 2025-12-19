@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSupabase } from '@/lib/SupabaseContext';
-import { createProject } from '@/lib/services/projectService';
+import { createProject, checkProjectNameExists } from '@/lib/services/projectService';
+import Image from 'next/image';
+import projectIcon from '@/app/assets/images/projectIcon52.svg';
+import closeIcon from '@/app/assets/images/closeIcon32.svg';
 import styles from './NewProjectModal.module.css';
 
 type NewProjectModalProps = {
@@ -31,9 +34,20 @@ export function NewProjectModal({ open, onClose, onCreated }: NewProjectModalPro
       setError('Project name is required');
       return;
     }
+    
     setSubmitting(true);
     setError(null);
+    
     try {
+      // Check if project name already exists before attempting to create
+      const exists = await checkProjectNameExists(supabase, trimmed);
+      if (exists) {
+        setError(`project name ${trimmed} already exists`);
+        setSubmitting(false);
+        return;
+      }
+
+      // If name doesn't exist, proceed with creation
       const { projectId, defaultFolderId } = await createProject(supabase, {
         name: trimmed,
         description,
@@ -54,38 +68,50 @@ export function NewProjectModal({ open, onClose, onCreated }: NewProjectModalPro
     <div className={styles.backdrop}>
       <div className={styles.modal}>
         <div className={styles.header}>
-          <div className={styles.title}>New Project</div>
+          <div className={styles.title}>Create Project</div>
           <button className={styles.close} onClick={onClose} aria-label="Close">
-            ×
+            <Image src={closeIcon} alt="Close" width={32} height={32} />
           </button>
         </div>
 
-        <div className={styles.field}>
-          <label className={styles.label}>Project name *</label>
+        <div className={styles.divider}></div>
+
+        <div className={styles.nameContainer}>
+          <div className={styles.iconWrapper}>
+            <Image src={projectIcon} alt="Project icon" width={52} height={52} />
+          </div>
+          <div className={styles.nameInputContainer}>
+            <label className={styles.nameLabel}>Project Name</label>
           <input
-            className={styles.input}
+              className={styles.nameInput}
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Enter project name"
           />
+          </div>
         </div>
 
-        <div className={styles.field}>
-          <label className={styles.label}>Description (optional)</label>
-          <input
-            className={styles.input}
+        <div className={styles.notesContainer}>
+          <label className={styles.notesLabel}>
+            <span className={styles.notesLabelText}>Add notes for this project</span>
+            <span className={styles.notesLabelLimit}> (250 characters limit)</span>
+          </label>
+          <div className={styles.textareaWrapper}>
+            <textarea
+              className={styles.textarea}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Add a short note"
-          />
+              onChange={(e) => {
+                if (e.target.value.length <= 250) {
+                  setDescription(e.target.value);
+                }
+              }}
+              maxLength={250}
+            />
+          </div>
         </div>
-
-        {error && <div className={styles.error}>{error}</div>}
 
         <div className={styles.footer}>
-          <button className={`${styles.button} ${styles.secondary}`} onClick={onClose}>
-            Cancel
-          </button>
+          {error && <div className={styles.error}>{error}</div>}
           <button
             className={`${styles.button} ${styles.primary}`}
             onClick={handleSubmit}

@@ -190,3 +190,49 @@ export async function deleteLibrary(
   }
 }
 
+export async function checkLibraryNameExists(
+  supabase: SupabaseClient,
+  projectId: string,
+  libraryName: string,
+  folderId?: string | null
+): Promise<boolean> {
+  const trimmed = libraryName.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  const resolvedProjectId = await resolveProjectId(supabase, projectId);
+
+  let query = supabase
+    .from('libraries')
+    .select('id')
+    .eq('project_id', resolvedProjectId)
+    .eq('name', trimmed)
+    .limit(1);
+
+  // If folderId is provided, check within that folder
+  // If folderId is null, check root libraries (folder_id is null)
+  // If folderId is undefined, check all libraries in the project
+  if (folderId !== undefined) {
+    if (folderId === null) {
+      query = query.is('folder_id', null);
+    } else {
+      if (!isUuid(folderId)) {
+        return false;
+      }
+      query = query.eq('folder_id', folderId);
+    }
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Error checking library name:', error);
+    // If there's an error checking, we'll let the create attempt proceed
+    // and handle the duplicate error there
+    return false;
+  }
+
+  return (data && data.length > 0) || false;
+}
+

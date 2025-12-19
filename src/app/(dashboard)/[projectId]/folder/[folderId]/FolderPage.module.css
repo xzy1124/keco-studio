@@ -28,17 +28,85 @@
   color: #dc2626;
 }
 
-.emptyState {
-  padding: 3rem 2rem;
-  text-align: center;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
+.emptyStateWrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  min-height: calc(100vh - 200px);
+}
+
+.emptyStateContainer {
+  width: 585px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.emptyIcon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 72px;
+  height: 72px;
 }
 
 .emptyText {
+  width: 585px;
+  height: 24px;
   color: #64748b;
+  font-size: 16px;
+  text-align: center;
+  line-height: 24px;
+}
+
+.createLibraryButton {
+  width: fit-content;
+  min-width: 163px;
+  height: 48px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.createLibraryButton:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.createLibraryButton:active {
+  background: #f1f5f9;
+}
+
+.plusIcon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+.plusHorizontal,
+.plusVertical {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.buttonText {
   font-size: 14px;
+  color: #0f172a;
+  font-weight: 500;
 }
 
 .grid {

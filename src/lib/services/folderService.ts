@@ -164,6 +164,35 @@ export async function deleteFolder(
     throw new Error('Invalid folder ID format');
   }
 
+  // First, delete all libraries associated with this folder (cascade delete)
+  // Query libraries first to get their IDs, then delete them individually
+  // This avoids potential issues with invalid folder_id values in the database
+  const { data: librariesToDelete, error: queryError } = await supabase
+    .from('libraries')
+    .select('id')
+    .eq('folder_id', folderId);
+
+  if (queryError) {
+    // If query fails, it might be due to invalid data in the database
+    // Log the error but continue with folder deletion
+    // The database constraint (on delete set null) will handle any remaining libraries
+    console.warn('Error querying libraries for folder deletion:', queryError.message);
+    // Continue to delete the folder - any libraries with valid folder_id will be set to null
+    // by the database constraint
+  } else if (librariesToDelete && librariesToDelete.length > 0) {
+    // Delete libraries by their IDs
+    const libraryIds = librariesToDelete.map(lib => lib.id);
+    const { error: deleteError } = await supabase
+      .from('libraries')
+      .delete()
+      .in('id', libraryIds);
+
+    if (deleteError) {
+      throw new Error(`Failed to delete libraries in folder: ${deleteError.message}`);
+    }
+  }
+
+  // Then delete the folder
   const { error } = await supabase
     .from('folders')
     .delete()

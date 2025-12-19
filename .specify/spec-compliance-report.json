@@ -1,0 +1,71 @@
+[
+  {
+    "spec_name": "001-library-asset-table",
+    "status": "warning",
+    "issues": [
+      {
+        "message": "有 8 个任务未完成: T015, T016, T017, T018, T019",
+        "severity": "warning"
+      }
+    ],
+    "passed": [
+      {
+        "message": "文件存在: src/components/libraries/LibraryAssetsTable.tsx"
+      },
+      {
+        "message": "文件存在: src/components/libraries/LibraryAssetsTable.module.css"
+      },
+      {
+        "message": "文件存在: src/lib/services/libraryAssetsService.ts"
+      },
+      {
+        "message": "文件存在: src/lib/types/libraryAssets.ts"
+      },
+      {
+        "message": "文件存在: src/app/(dashboard)/[projectId]/[libraryId]/page.tsx"
+      },
+      {
+        "message": "类型定义存在: LibrarySummary"
+      },
+      {
+        "message": "类型定义存在: SectionConfig"
+      },
+      {
+        "message": "类型定义存在: PropertyConfig"
+      },
+      {
+        "message": "类型定义存在: AssetRow"
+      },
+      {
+        "message": "函数已实现: getLibrarySummary"
+      },
+      {
+        "message": "函数已实现: getLibrarySchema"
+      },
+      {
+        "message": "函数已实现: getLibraryAssetsWithProperties"
+      },
+      {
+        "message": "两层表头已实现"
+      },
+      {
+        "message": "空状态处理已实现"
+      },
+      {
+        "message": "缺失值占位已实现"
+      },
+      {
+        "message": "Spec要求: 表格形式"
+      },
+      {
+        "message": "Spec要求: 两层表头"
+      },
+      {
+        "message": "Spec要求: predefine配置"
+      },
+      {
+        "message": "Spec要求: F2C-mcp"
+      }
+    ]
+  }
+]
