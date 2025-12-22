@@ -5,11 +5,17 @@ import { useRouter } from 'next/navigation';
 import { useSupabase } from '@/lib/SupabaseContext';
 import { listProjects, Project } from '@/lib/services/projectService';
 import { NewProjectModal } from '@/components/projects/NewProjectModal';
+import { useNavigation } from '@/lib/contexts/NavigationContext';
+import projectEmptyIcon from '@/app/assets/images/projectEmptyIcon.svg';
+import plusHorizontal from '@/app/assets/images/plusHorizontal.svg';
+import plusVertical from '@/app/assets/images/plusVertical.svg';
+import Image from 'next/image';
 import styles from './page.module.css';
 
 export default function ProjectsPage() {
   const supabase = useSupabase();
   const router = useRouter();
+  const { setShowCreateProjectBreadcrumb } = useNavigation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -32,6 +38,14 @@ export default function ProjectsPage() {
     fetchProjects();
   }, [fetchProjects]);
 
+  useEffect(() => {
+    // Show create project breadcrumb when there are no projects
+    setShowCreateProjectBreadcrumb(!loading && projects.length === 0);
+    return () => {
+      setShowCreateProjectBreadcrumb(false);
+    };
+  }, [loading, projects.length, setShowCreateProjectBreadcrumb]);
+
   const handleCreated = (projectId: string) => {
     fetchProjects();
     router.push(`/${projectId}`);
@@ -45,22 +59,59 @@ export default function ProjectsPage() {
     <div className={styles.container}>
       <div className={styles.header}>
         <h1 className={styles.title}>Projects</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className={styles.newProjectButton}
-        >
-          New Project
-        </button>
+        {!loading && projects.length > 0 && (
+          <button
+            onClick={() => setShowModal(true)}
+            className={styles.newProjectButton}
+          >
+            New Project
+          </button>
+        )}
       </div>
 
       {loading && <div>Loading projects...</div>}
       {error && <div className={styles.error}>{error}</div>}
 
-      {!loading && projects.length === 0 && (
-        <div className={styles.emptyMessage}>No projects yet. Create your first project.</div>
-      )}
-
-      <div className={styles.projectsGrid}>
+      {!loading && projects.length === 0 ? (
+        <div className={styles.emptyStateWrapper}>
+          <div className={styles.emptyStateContainer}>
+            <div className={styles.emptyIcon}>
+              <Image
+                src={projectEmptyIcon}
+                alt="Project icon"
+                width={59}
+                height={64}
+              />
+            </div>
+            <div className={styles.emptyText}>
+              There is no any project here. create your first project.
+            </div>
+            <button
+              className={styles.createProjectButton}
+              onClick={() => setShowModal(true)}
+            >
+              <span className={styles.plusIcon}>
+                <Image
+                  src={plusHorizontal}
+                  alt=""
+                  width={17}
+                  height={2}
+                  className={styles.plusHorizontal}
+                />
+                <Image
+                  src={plusVertical}
+                  alt=""
+                  width={2}
+                  height={17}
+                  className={styles.plusVertical}
+                />
+              </span>
+              <span className={styles.buttonText}>Create first project</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.projectsGrid}>
         {projects.map((project) => (
           <div
             key={project.id}
@@ -75,7 +126,8 @@ export default function ProjectsPage() {
             )}
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
       <NewProjectModal open={showModal} onClose={() => setShowModal(false)} onCreated={handleCreated} />
     </div>

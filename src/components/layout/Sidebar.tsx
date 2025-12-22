@@ -10,6 +10,9 @@ import folderCollapseIcon from "@/app/assets/images/folderCollapseIcon.svg";
 import folderIcon from "@/app/assets/images/folderIcon.svg";
 import plusHorizontal from "@/app/assets/images/plusHorizontal.svg";
 import plusVertical from "@/app/assets/images/plusVertical.svg";
+import createProjectIcon from "@/app/assets/images/createProjectIcon.svg";
+import addProjectIcon from "@/app/assets/images/addProjectIcon.svg";
+import searchIcon from "@/app/assets/images/searchIcon.svg";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -174,21 +177,21 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     }
   }, [supabase]);
 
-  // Keep sidebar projects in sync:
-  // - initial mount
-  // - whenever the route changes (e.g. project created from /projects and we navigate to /[projectId])
   useEffect(() => {
     fetchProjects();
-  }, [pathname, fetchProjects]);
+  }, [fetchProjects]);
 
   // 跟踪当前项目ID，用于检测项目切换
   const prevProjectIdRef = useRef<string | null>(null);
+  // 跟踪是否已初始化展开状态（避免用户手动折叠后重新展开）
+  const hasInitializedExpandedKeys = useRef(false);
 
   useEffect(() => {
     fetchFoldersAndLibraries(currentIds.projectId);
-    // 切换项目时重置展开状态
+    // 切换项目时重置展开状态和初始化标志
     if (prevProjectIdRef.current !== currentIds.projectId) {
       setExpandedKeys([]);
+      hasInitializedExpandedKeys.current = false;
       prevProjectIdRef.current = currentIds.projectId;
     }
   }, [currentIds.projectId, fetchFoldersAndLibraries]);
@@ -206,6 +209,14 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     }
   }, [currentIds.folderId, pathname]);
 
+  // 初始化展开状态：当文件夹数据加载完成后，默认展开所有文件夹
+  // 只在首次加载时（未初始化且 expandedKeys 为空）设置默认展开
+  useEffect(() => {
+    if (folders.length > 0 && !hasInitializedExpandedKeys.current && expandedKeys.length === 0) {
+      setExpandedKeys(folders.map((f) => `folder-${f.id}`));
+      hasInitializedExpandedKeys.current = true;
+    }
+  }, [folders, expandedKeys.length]);
 
   // 监听libraryCreated事件，当从其他页面创建library时刷新Sidebar数据
   useEffect(() => {
@@ -286,12 +297,26 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     e.stopPropagation();
     if (!window.confirm('Delete this library?')) return;
     try {
+      // Get library info before deleting to know which folder it belongs to
+      const libraryToDelete = libraries.find(lib => lib.id === libraryId);
+      const deletedFolderId = libraryToDelete?.folder_id || null;
+      
       await deleteLibrary(supabase, libraryId);
       fetchFoldersAndLibraries(currentIds.projectId);
+      
+      // Dispatch event to notify ProjectPage and FolderPage to refresh
+      window.dispatchEvent(new CustomEvent('libraryDeleted', {
+        detail: { folderId: deletedFolderId, libraryId, projectId: currentIds.projectId }
+      }));
+      
+      // If the deleted library is currently being viewed (or viewing an asset in it), navigate to project page
+      if (currentIds.libraryId === libraryId && currentIds.projectId) {
+        router.push(`/${currentIds.projectId}`);
+      }
     } catch (err: any) {
       setError(err?.message || 'Failed to delete library');
     }
-  }, [supabase, currentIds.projectId, fetchFoldersAndLibraries]);
+  }, [supabase, currentIds.projectId, currentIds.libraryId, libraries, fetchFoldersAndLibraries, router]);
 
   const handleFolderDelete = useCallback(async (folderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -306,24 +331,49 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
 
   const treeData: DataNode[] = useMemo(() => {
     if (!currentIds.projectId) return [];
-
+    
     // Filter folders and libraries for current project
     const projectFolders = folders.filter((f) => f.project_id === currentIds.projectId);
     const projectLibraries = libraries.filter((lib) => lib.project_id === currentIds.projectId);
-
-    // Group libraries by folder_id (string keys)
+    
+    // Group libraries by folder_id
+    // Use string keys for Map to ensure proper matching
     const librariesByFolder = new Map<string, Library[]>();
     projectLibraries.forEach((lib) => {
+      // Convert null to empty string for root libraries, or use folder_id as string
+      // Ensure folder_id is converted to string (handle null case)
       const folderId = lib.folder_id ? String(lib.folder_id) : '';
       if (!librariesByFolder.has(folderId)) {
         librariesByFolder.set(folderId, []);
       }
       librariesByFolder.get(folderId)!.push(lib);
     });
-
+    
+    // Debug: log libraries grouping
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Libraries grouped by folder_id:', {
+        totalLibraries: projectLibraries.length,
+        librariesByFolderKeys: Array.from(librariesByFolder.keys()),
+        librariesByFolder: Object.fromEntries(librariesByFolder),
+        folders: projectFolders.map(f => ({ id: f.id, name: f.name }))
+      });
+    }
+    
+    // Build folder node (simplified: no nested folders, all folders are root level)
     const buildFolderNode = (folder: Folder): DataNode => {
+      // Get libraries for this folder (folder.id is string, so it matches Map key)
+      // Ensure folder.id is converted to string for Map lookup
       const folderLibraries = librariesByFolder.get(String(folder.id)) || [];
-
+      
+      // Debug: log folder node building
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Building folder node: ${folder.name} (id: ${folder.id})`, {
+          folderLibraries: folderLibraries.length,
+          folderLibrariesNames: folderLibraries.map(l => l.name)
+        });
+      }
+      
+      // Create button node for "Create new library" - always first child
       const createButtonNode: DataNode = {
         title: (
           <button
@@ -362,46 +412,11 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         key: `folder-create-${folder.id}`,
         isLeaf: true,
       };
-
+      
       const children: DataNode[] = [
-        createButtonNode,
+        createButtonNode, // Always first
         ...folderLibraries.map((lib) => {
           const libProjectId = lib.project_id;
-
-          const assetChildren: DataNode[] = (assets[lib.id] || []).map<DataNode>((asset) => ({
-            title: (
-              <div className={styles.itemRow}>
-                <div className={styles.itemMain}>
-                  <span className={styles.itemText}>{asset.name}</span>
-                </div>
-                <div className={styles.itemActions}>
-                  <button
-                    className={styles.iconButton}
-                    aria-label="Delete asset"
-                    onClick={(e) => handleAssetDelete(asset.id, lib.id, e)}
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-            ),
-            key: `asset-${asset.id}`,
-            isLeaf: true,
-          }));
-
-          const addAssetNode: DataNode = {
-            title: (
-              <div className={styles.itemRow}>
-                <div className={styles.itemMain}>
-                  <span className={styles.itemAddIcon}>+</span>
-                  <span className={styles.itemAddText}>Add New Asset</span>
-                </div>
-              </div>
-            ),
-            key: `add-asset-${lib.id}`,
-            isLeaf: true,
-          };
-
           return {
             title: (
               <div className={styles.itemRow}>
@@ -448,12 +463,72 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
               </div>
             ),
             key: `library-${lib.id}`,
-            isLeaf: false,
-            children: [addAssetNode, ...assetChildren],
+            isLeaf: false, // Allow expand to show assets and create button
+            children: [
+              // Create new asset button - always first
+              {
+                title: (
+                  <button
+                    className={styles.createButton}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!currentIds.projectId) {
+                        setError('Please select a project first');
+                        return;
+                      }
+                      router.push(`/${libProjectId}/${lib.id}/asset/new`);
+                    }}
+                  >
+                    <span className={styles.createButtonText}>
+                      <span className={styles.plusIcon}>
+                        <Image
+                          src={plusHorizontal}
+                          alt=""
+                          width={17}
+                          height={2}
+                          className={styles.plusHorizontal}
+                        />
+                        <Image
+                          src={plusVertical}
+                          alt=""
+                          width={2}
+                          height={17}
+                          className={styles.plusVertical}
+                        />
+                      </span>
+                      {' '}Add new asset
+                    </span>
+                  </button>
+                ),
+                key: `add-asset-${lib.id}`,
+                isLeaf: true,
+              },
+              // Existing assets
+              ...(assets[lib.id] || []).map<DataNode>((asset) => ({
+                title: (
+                  <div className={styles.itemRow}>
+                    <div className={styles.itemMain}>
+                      <span className={styles.itemText}>{asset.name}</span>
+                    </div>
+                    <div className={styles.itemActions}>
+                      <button
+                        className={styles.iconButton}
+                        aria-label="Delete asset"
+                        onClick={(e) => handleAssetDelete(asset.id, lib.id, e)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ),
+                key: `asset-${asset.id}`,
+                isLeaf: true,
+              })),
+            ],
           };
         }),
       ];
-
+      
       return {
         title: (
           <div className={styles.itemRow}>
@@ -465,9 +540,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                 height={18}
                 className={styles.itemIcon}
               />
-              <span className={styles.itemText} style={{ fontWeight: 500 }}>
-                {folder.name}
-              </span>
+              <span className={styles.itemText} style={{ fontWeight: 500 }}>{folder.name}</span>
             </div>
             <div className={styles.itemActions}>
               <button
@@ -481,55 +554,22 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
           </div>
         ),
         key: `folder-${folder.id}`,
-        isLeaf: children.length === 0,
+        isLeaf: children.length === 0, // Only show expand/collapse if has children
         children: children.length > 0 ? children : undefined,
       };
     };
-
+    
     const result: DataNode[] = [];
-
+    
+    // Add all folders (all folders are root level now, no nesting)
     projectFolders.forEach((folder) => {
       result.push(buildFolderNode(folder));
     });
-
+    
+    // Add libraries without folder (folder_id is null, stored as empty string in Map)
     const rootLibraries = librariesByFolder.get('') || [];
     rootLibraries.forEach((lib) => {
       const libProjectId = lib.project_id;
-
-      const assetChildren: DataNode[] = (assets[lib.id] || []).map<DataNode>((asset) => ({
-        title: (
-          <div className={styles.itemRow}>
-            <div className={styles.itemMain}>
-              <span className={styles.itemText}>{asset.name}</span>
-            </div>
-            <div className={styles.itemActions}>
-              <button
-                className={styles.iconButton}
-                aria-label="Delete asset"
-                onClick={(e) => handleAssetDelete(asset.id, lib.id, e)}
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        ),
-        key: `asset-${asset.id}`,
-        isLeaf: true,
-      }));
-
-      const addAssetNode: DataNode = {
-        title: (
-          <div className={styles.itemRow}>
-            <div className={styles.itemMain}>
-              <span className={styles.itemAddIcon}>+</span>
-              <span className={styles.itemAddText}>Add New Asset</span>
-            </div>
-          </div>
-        ),
-        key: `add-asset-${lib.id}`,
-        isLeaf: true,
-      };
-
       result.push({
         title: (
           <div className={styles.itemRow}>
@@ -576,11 +616,71 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
           </div>
         ),
         key: `library-${lib.id}`,
-        isLeaf: false,
-        children: [addAssetNode, ...assetChildren],
+        isLeaf: false, // Allow expand to show assets and create button
+        children: [
+          // Create new asset button - always first
+          {
+            title: (
+              <button
+                className={styles.createButton}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!currentIds.projectId) {
+                    setError('Please select a project first');
+                    return;
+                  }
+                  router.push(`/${libProjectId}/${lib.id}/asset/new`);
+                }}
+              >
+                <span className={styles.createButtonText}>
+                  <span className={styles.plusIcon}>
+                    <Image
+                      src={plusHorizontal}
+                      alt=""
+                      width={17}
+                      height={2}
+                      className={styles.plusHorizontal}
+                    />
+                    <Image
+                      src={plusVertical}
+                      alt=""
+                      width={2}
+                      height={17}
+                      className={styles.plusVertical}
+                    />
+                  </span>
+                  {' '}Add new asset
+                </span>
+              </button>
+            ),
+            key: `add-asset-${lib.id}`,
+            isLeaf: true,
+          },
+          // Existing assets
+          ...(assets[lib.id] || []).map<DataNode>((asset) => ({
+            title: (
+              <div className={styles.itemRow}>
+                <div className={styles.itemMain}>
+                  <span className={styles.itemText}>{asset.name}</span>
+                </div>
+                <div className={styles.itemActions}>
+                  <button
+                    className={styles.iconButton}
+                    aria-label="Delete asset"
+                    onClick={(e) => handleAssetDelete(asset.id, lib.id, e)}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ),
+            key: `asset-${asset.id}`,
+            isLeaf: true,
+          })),
+        ],
       });
     });
-
+    
     return result;
   }, [folders, libraries, assets, currentIds.projectId, handleLibraryPredefineClick, handleAssetDelete, handleFolderDelete, handleLibraryDelete]);
 
@@ -609,19 +709,22 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
 
   const onSelect = (_keys: React.Key[], info: any) => {
     const key: string = info.node.key;
-    if (key.startsWith('add-asset-')) {
-      const libId = key.replace('add-asset-', '');
-      const lib = libraries.find((l) => l.id === libId);
-      const projId = lib?.project_id || currentIds.projectId;
-      if (projId && libId) {
-        router.push(`/${projId}/${libId}/asset/new`);
-      }
-    } else if (key.startsWith('folder-create-')) {
-      // Fallback: button itself handles click, but keep selection in sync
+    if (key.startsWith('folder-create-')) {
+      // Handle create button click - button's onClick will handle this
+      // This is just a fallback in case onSelect is called
       const folderId = key.replace('folder-create-', '');
       setSelectedFolderId(folderId);
+    } else if (key.startsWith('add-asset-')) {
+      // Handle create asset button click - button's onClick will handle this
+      // This is just a fallback in case onSelect is called
+      const libraryId = key.replace('add-asset-', '');
+      const lib = libraries.find((l) => l.id === libraryId);
+      if (lib && currentIds.projectId) {
+        router.push(`/${currentIds.projectId}/${libraryId}/asset/new`);
+      }
     } else if (key.startsWith('folder-')) {
       const id = key.replace('folder-', '');
+      // Navigate to folder page
       if (currentIds.projectId) {
         router.push(`/${currentIds.projectId}/folder/${id}`);
       }
@@ -652,7 +755,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   };
 
   const onExpand = async (keys: React.Key[], info: { node: EventDataNode }) => {
-    // 更新展开状态
+    // 更新展开状态（先同步更新，确保UI立即响应）
     setExpandedKeys(keys);
     
     const key = info.node.key as string;
@@ -662,7 +765,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         await fetchAssets(id);
       }
     }
-    // Folders don't need to fetch anything on expand
+    // Folders don't need to fetch anything on expand/collapse
   };
 
   // 自定义展开/折叠图标
@@ -692,14 +795,18 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
       setError(err?.message || 'Failed to delete project');
     }
   };
-
-  const handleProjectCreated = (projectId: string, defaultFolderId: string) => {
+  const handleProjectCreated = async (projectId: string, defaultFolderId: string) => {
     console.log('Project created:', { projectId, defaultFolderId });
     setShowProjectModal(false);
-    fetchProjects();
-    // Optionally navigate to the new project
+    await fetchProjects();
+    // Navigate to the new project and refresh folders/libraries
     if (projectId) {
       router.push(`/${projectId}`);
+      // Refresh folders and libraries after navigation
+      // Use setTimeout to ensure navigation completes first
+      setTimeout(() => {
+        fetchFoldersAndLibraries(projectId);
+      }, 100);
     }
   };
 
@@ -766,7 +873,13 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
 
       <div className={styles.searchContainer}>
         <label className={styles.searchLabel}>
-          <span className={styles.searchIcon}>⌕</span>
+          <Image
+            src={searchIcon}
+            alt="Search"
+            width={24}
+            height={24}
+            className={styles.searchIcon}
+          />
           <input
             placeholder="Search for..."
             className={styles.searchInput}
@@ -782,7 +895,12 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
             onClick={() => setShowProjectModal(true)}
             title="New Project"
           >
-            +
+            <Image
+              src={addProjectIcon}
+              alt="Add project"
+              width={24}
+              height={24}
+            />
           </button>
         </div>
         {loadingProjects && <div className={styles.hint}>Loading projects...</div>}
@@ -816,7 +934,19 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
             );
           })}
           {!loadingProjects && projects.length === 0 && (
-            <div className={styles.hint}>No projects. Create one.</div>
+            <button
+              className={styles.createProjectButton}
+              onClick={() => setShowProjectModal(true)}
+            >
+              <Image
+                src={createProjectIcon}
+                alt="Project"
+                width={24}
+                height={24}
+                className={styles.itemIcon}
+              />
+              <span className={styles.itemText}>Create Project</span>
+            </button>
           )}
         </div>
 
@@ -832,7 +962,12 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                   onClick={handleAddButtonClick}
                   title="Add new folder or library"
                 >
-                  +
+                  <Image
+                    src={addProjectIcon}
+                    alt="Add library"
+                    width={24}
+                    height={24}
+                  />
                 </button>
               </div>
               {(loadingFolders || loadingLibraries) && (

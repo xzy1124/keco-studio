@@ -161,3 +161,28 @@ export async function deleteProject(
   }
 }
 
+export async function checkProjectNameExists(
+  supabase: SupabaseClient,
+  projectName: string
+): Promise<boolean> {
+  const trimmed = projectName.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('name', trimmed)
+    .limit(1);
+
+  if (error) {
+    console.error('Error checking project name:', error);
+    // If there's an error checking, we'll let the create attempt proceed
+    // and handle the duplicate error there
+    return false;
+  }
+
+  return (data && data.length > 0) || false;
+}
+

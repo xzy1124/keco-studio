@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSupabase } from '@/lib/SupabaseContext';
-import { createLibrary } from '@/lib/services/libraryService';
+import { createLibrary, checkLibraryNameExists } from '@/lib/services/libraryService';
+import Image from 'next/image';
+import closeIcon from '@/app/assets/images/closeIcon32.svg';
 import styles from './NewLibraryModal.module.css';
 
 type NewLibraryModalProps = {
@@ -33,9 +35,20 @@ export function NewLibraryModal({ open, projectId, folderId, onClose, onCreated 
       setError('Library name is required');
       return;
     }
+    
     setSubmitting(true);
     setError(null);
+    
     try {
+      // Check if library name already exists before attempting to create
+      const exists = await checkLibraryNameExists(supabase, projectId, trimmed, folderId || null);
+      if (exists) {
+        setError(`Library name ${trimmed} already exists`);
+        setSubmitting(false);
+        return;
+      }
+
+      // If name doesn't exist, proceed with creation
       const libraryId = await createLibrary(supabase, {
         projectId,
         name: trimmed,
@@ -47,6 +60,7 @@ export function NewLibraryModal({ open, projectId, folderId, onClose, onCreated 
       setDescription('');
       onClose();
     } catch (e: any) {
+      console.error('Library creation error:', e);
       setError(e?.message || 'Failed to create library');
     } finally {
       setSubmitting(false);
@@ -57,38 +71,47 @@ export function NewLibraryModal({ open, projectId, folderId, onClose, onCreated 
     <div className={styles.backdrop}>
       <div className={styles.modal}>
         <div className={styles.header}>
-          <div className={styles.title}>New Library</div>
+          <div className={styles.title}>Create Library</div>
           <button className={styles.close} onClick={onClose} aria-label="Close">
-            ×
+            <Image src={closeIcon} alt="Close" width={32} height={32} />
           </button>
         </div>
 
-        <div className={styles.field}>
-          <label className={styles.label}>Library name *</label>
-          <input
-            className={styles.input}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Enter library name"
-          />
+        <div className={styles.divider}></div>
+
+        <div className={styles.nameContainer}>
+          <div className={styles.nameInputContainer}>
+            <label className={styles.nameLabel}>Library Name</label>
+            <input
+              className={styles.nameInput}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter library name"
+            />
+          </div>
         </div>
 
-        <div className={styles.field}>
-          <label className={styles.label}>Description (optional)</label>
-          <input
-            className={styles.input}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Add a short note"
-          />
+        <div className={styles.notesContainer}>
+          <label className={styles.notesLabel}>
+            <span className={styles.notesLabelText}>Add notes for this Library</span>
+            <span className={styles.notesLabelLimit}> (250 characters limit)</span>
+          </label>
+          <div className={styles.textareaWrapper}>
+            <textarea
+              className={styles.textarea}
+              value={description}
+              onChange={(e) => {
+                if (e.target.value.length <= 250) {
+                  setDescription(e.target.value);
+                }
+              }}
+              maxLength={250}
+            />
+          </div>
         </div>
-
-        {error && <div className={styles.error}>{error}</div>}
 
         <div className={styles.footer}>
-          <button className={`${styles.button} ${styles.secondary}`} onClick={onClose}>
-            Cancel
-          </button>
+          {error && <div className={styles.error}>{error}</div>}
           <button
             className={`${styles.button} ${styles.primary}`}
             onClick={handleSubmit}

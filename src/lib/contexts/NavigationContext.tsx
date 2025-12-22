@@ -15,6 +15,8 @@ type NavigationContextType = {
   currentLibraryId: string | null;
   currentAssetId: string | null;
   currentFolderId: string | null;
+  showCreateProjectBreadcrumb: boolean;
+  setShowCreateProjectBreadcrumb: (show: boolean) => void;
 };
 
 const NavigationContext = createContext<NavigationContextType | null>(null);
@@ -28,6 +30,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   const [assetName, setAssetName] = useState<string | null>(null);
   const [folderName, setFolderName] = useState<string | null>(null);
   const [libraryFolderId, setLibraryFolderId] = useState<string | null>(null);
+  const [showCreateProjectBreadcrumb, setShowCreateProjectBreadcrumb] = useState(false);
 
   const currentProjectId = useMemo(() => (params.projectId as string) || null, [params.projectId]);
   const currentLibraryId = useMemo(() => (params.libraryId as string) || null, [params.libraryId]);
@@ -83,14 +86,24 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       }
 
       // Resolve current folder name (if we have a folder ID)
+      // Validate that currentFolderId is a valid UUID before querying
       if (currentFolderId) {
-        const { data, error } = await supabase
-          .from('folders')
-          .select('name')
-          .eq('id', currentFolderId)
-          .single();
-        if (mounted) {
-          setFolderName(error ? null : data?.name ?? null);
+        // Check if it's a valid UUID format
+        const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentFolderId);
+        if (isValidUuid) {
+          const { data, error } = await supabase
+            .from('folders')
+            .select('name')
+            .eq('id', currentFolderId)
+            .single();
+          if (mounted) {
+            setFolderName(error ? null : data?.name ?? null);
+          }
+        } else {
+          // Invalid UUID format, skip query
+          if (mounted) {
+            setFolderName(null);
+          }
         }
       } else {
         setFolderName(null);
@@ -158,6 +171,8 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     currentLibraryId,
     currentAssetId,
     currentFolderId,
+    showCreateProjectBreadcrumb,
+    setShowCreateProjectBreadcrumb,
   };
 
   return (
