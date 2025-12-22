@@ -28,7 +28,8 @@ import { listLibraries, Library, deleteLibrary } from "@/lib/services/librarySer
 import { listFolders, Folder, deleteFolder } from "@/lib/services/folderService";
 import { SupabaseClient } from "@supabase/supabase-js";
 import styles from "./Sidebar.module.css";
-
+import { Tooltip } from 'antd';
+import homeQuestionIcon from "@/app/assets/images/homeQuestionIcon.svg";
 type UserProfile = {
   id: string;
   email: string;
@@ -922,6 +923,22 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                 />
                 <span className={styles.itemText}>{project.name}</span>
                 <span className={styles.itemActions}>
+                  {project.description && (
+                    <Tooltip
+                      title={project.description}
+                      placement="top"
+                      styles={{
+                        root: { maxWidth: '300px' }
+                      }}
+                    >
+                      <div
+                        className={styles.infoIconWrapper}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className={styles.infoIcon}>i</span>
+                      </div>
+                    </Tooltip>
+                  )}
                   <button
                     className={styles.iconButton}
                     aria-label="Delete project"
