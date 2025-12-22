@@ -97,41 +97,41 @@ export default function FolderPage() {
 
   const handleLibraryMoreClick = (libraryId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    // 功能暂不实现
+    // Feature not implemented yet
   };
 
   const handleExport = (libraryId: string) => {
-    // 功能暂不实现
+    // Feature not implemented yet
     console.log('Export library:', libraryId);
   };
 
   const handleVersionHistory = (libraryId: string) => {
-    // 功能暂不实现
+    // Feature not implemented yet
     console.log('Version history:', libraryId);
   };
 
   const handleCreateBranch = (libraryId: string) => {
-    // 功能暂不实现
+    // Feature not implemented yet
     console.log('Create branch:', libraryId);
   };
 
   const handleRename = (libraryId: string) => {
-    // 功能暂不实现
+    // Feature not implemented yet
     console.log('Rename:', libraryId);
   };
 
   const handleDuplicate = (libraryId: string) => {
-    // 功能暂不实现
+    // Feature not implemented yet
     console.log('Duplicate:', libraryId);
   };
 
   const handleMoveTo = (libraryId: string) => {
-    // 功能暂不实现
+    // Feature not implemented yet
     console.log('Move to:', libraryId);
   };
 
   const handleDelete = (libraryId: string) => {
-    // 功能暂不实现
+    // Feature not implemented yet
     console.log('Delete:', libraryId);
   };
 

@@ -120,6 +120,9 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+  // Loading states for after creation
+  const [loadingAfterCreate, setLoadingAfterCreate] = useState(false);
+  const [createMessage, setCreateMessage] = useState<string>('');
 
   const currentIds = useMemo(() => {
     const parts = pathname.split("/").filter(Boolean);
@@ -181,14 +184,14 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     fetchProjects();
   }, [fetchProjects]);
 
-  // 跟踪当前项目ID，用于检测项目切换
+  // Track current project ID to detect project switching
   const prevProjectIdRef = useRef<string | null>(null);
-  // 跟踪是否已初始化展开状态（避免用户手动折叠后重新展开）
+  // Track whether expanded state has been initialized (to avoid re-expanding after user manually collapses)
   const hasInitializedExpandedKeys = useRef(false);
 
   useEffect(() => {
     fetchFoldersAndLibraries(currentIds.projectId);
-    // 切换项目时重置展开状态和初始化标志
+    // Reset expanded state and initialization flag when switching projects
     if (prevProjectIdRef.current !== currentIds.projectId) {
       setExpandedKeys([]);
       hasInitializedExpandedKeys.current = false;
@@ -209,8 +212,8 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     }
   }, [currentIds.folderId, pathname]);
 
-  // 初始化展开状态：当文件夹数据加载完成后，默认展开所有文件夹
-  // 只在首次加载时（未初始化且 expandedKeys 为空）设置默认展开
+  // Initialize expanded state: expand all folders by default when folder data is loaded
+  // Only set default expansion on first load (when not initialized and expandedKeys is empty)
   useEffect(() => {
     if (folders.length > 0 && !hasInitializedExpandedKeys.current && expandedKeys.length === 0) {
       setExpandedKeys(folders.map((f) => `folder-${f.id}`));
@@ -218,10 +221,10 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     }
   }, [folders, expandedKeys.length]);
 
-  // 监听libraryCreated事件，当从其他页面创建library时刷新Sidebar数据
+  // Listen to libraryCreated event to refresh Sidebar data when library is created from other pages
   useEffect(() => {
     const handleLibraryCreated = (event: CustomEvent) => {
-      // 刷新当前项目的folders和libraries数据
+      // Refresh folders and libraries data for current project
       if (currentIds.projectId) {
         fetchFoldersAndLibraries(currentIds.projectId);
       }
@@ -254,6 +257,22 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
       fetchAssets(currentIds.libraryId);
     }
   }, [currentIds.libraryId, fetchAssets]);
+
+  // Listen to assetCreated event to refresh assets list for the library when asset is created
+  useEffect(() => {
+    const handleAssetCreated = (event: CustomEvent) => {
+      const { libraryId } = event.detail;
+      if (libraryId) {
+        fetchAssets(libraryId);
+      }
+    };
+
+    window.addEventListener('assetCreated' as any, handleAssetCreated as EventListener);
+    
+    return () => {
+      window.removeEventListener('assetCreated' as any, handleAssetCreated as EventListener);
+    };
+  }, [fetchAssets]);
 
   // actions
   const handleProjectClick = (projectId: string) => {
@@ -755,7 +774,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   };
 
   const onExpand = async (keys: React.Key[], info: { node: EventDataNode }) => {
-    // 更新展开状态（先同步更新，确保UI立即响应）
+    // Update expanded state (sync update first to ensure UI responds immediately)
     setExpandedKeys(keys);
     
     const key = info.node.key as string;
@@ -768,12 +787,12 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     // Folders don't need to fetch anything on expand/collapse
   };
 
-  // 自定义展开/折叠图标
+  // Custom expand/collapse icon
   const switcherIcon = ({ expanded }: { expanded: boolean }) => {
     return (
       <Image
         src={expanded ? folderExpandIcon : folderCollapseIcon}
-        alt={expanded ? "展开" : "折叠"}
+        alt={expanded ? "Expand" : "Collapse"}
         width={expanded ? 14 : 8}
         height={expanded ? 8 : 14}
         style={{ display: 'block' }}
@@ -798,33 +817,48 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   const handleProjectCreated = async (projectId: string, defaultFolderId: string) => {
     console.log('Project created:', { projectId, defaultFolderId });
     setShowProjectModal(false);
+    setLoadingAfterCreate(true);
+    setCreateMessage('Project created, loading...');
     await fetchProjects();
     // Navigate to the new project and refresh folders/libraries
     if (projectId) {
       router.push(`/${projectId}`);
       // Refresh folders and libraries after navigation
       // Use setTimeout to ensure navigation completes first
-      setTimeout(() => {
-        fetchFoldersAndLibraries(projectId);
+      setTimeout(async () => {
+        await fetchFoldersAndLibraries(projectId);
+        setLoadingAfterCreate(false);
+        setCreateMessage('');
       }, 100);
+    } else {
+      setLoadingAfterCreate(false);
+      setCreateMessage('');
     }
   };
 
-  const handleLibraryCreated = (libraryId: string) => {
+  const handleLibraryCreated = async (libraryId: string) => {
     setShowLibraryModal(false);
     const createdFolderId = selectedFolderId;
     setSelectedFolderId(null); // Clear selection after creation
-    fetchFoldersAndLibraries(currentIds.projectId);
+    setLoadingAfterCreate(true);
+    setCreateMessage('Library created, loading...');
+    await fetchFoldersAndLibraries(currentIds.projectId);
+    setLoadingAfterCreate(false);
+    setCreateMessage('');
     // Dispatch event to notify FolderPage to refresh
     window.dispatchEvent(new CustomEvent('libraryCreated', {
       detail: { folderId: createdFolderId, libraryId }
     }));
   };
 
-  const handleFolderCreated = () => {
+  const handleFolderCreated = async () => {
     setShowFolderModal(false);
     setSelectedFolderId(null); // Clear selection after creation
-    fetchFoldersAndLibraries(currentIds.projectId);
+    setLoadingAfterCreate(true);
+    setCreateMessage('Folder created, loading...');
+    await fetchFoldersAndLibraries(currentIds.projectId);
+    setLoadingAfterCreate(false);
+    setCreateMessage('');
     // Dispatch event to notify ProjectPage to refresh
     window.dispatchEvent(new CustomEvent('folderCreated'));
   };
@@ -904,6 +938,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
           </button>
         </div>
         {loadingProjects && <div className={styles.hint}>Loading projects...</div>}
+        {loadingAfterCreate && <div className={styles.loadingAfterCreate}>{createMessage}</div>}
         <div className={styles.sectionList}>
           {projects.map((project) => {
             const isActive = currentIds.projectId === project.id;

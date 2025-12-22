@@ -4,7 +4,7 @@ import styles from './FieldsList.module.css';
 
 interface FieldsListProps {
   fields: FieldConfig[];
-  /** 行内编辑时直接更新字段 */
+  /** Update field directly when editing inline */
   onChangeField: (fieldId: string, data: Omit<FieldConfig, 'id'>) => void;
   onDeleteField: (fieldId: string) => void;
   disabled?: boolean;
@@ -19,7 +19,7 @@ export function FieldsList({ fields, onChangeField, onDeleteField, disabled, isF
   return (
     <div className={styles.fieldsList}>
       {fields.map((field, index) => {
-        // 如果是第一个section的第一个字段，且label是'name'，type是'string'，则是mandatory字段
+        // If this is the first field of the first section, and label is 'name', type is 'string', then it's a mandatory field
         const isMandatoryNameField = isFirstSection && index === 0 && field.label === 'name' && field.dataType === 'string';
         
         return (

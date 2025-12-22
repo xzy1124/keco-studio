@@ -155,7 +155,7 @@
   overflow-x: hidden;
 }
 
-/* 自定义滚动条样式 */
+/* Custom scrollbar styles */
 .textarea::-webkit-scrollbar {
   width: 6px;
 }
@@ -174,7 +174,7 @@
   background: #94a3b8;
 }
 
-/* Firefox 滚动条样式 */
+/* Firefox scrollbar styles */
 .textarea {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;

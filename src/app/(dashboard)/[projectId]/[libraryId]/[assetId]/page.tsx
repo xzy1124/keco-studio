@@ -245,7 +245,7 @@ export default function AssetPage() {
           <div className={styles.fieldsContainer}>
               {sectionKeys.length === 0 && (
                 <div className={styles.emptyFieldsMessage}>
-                  还没有表头定义，请先在 Predefine 设置字段。
+                  No field definitions yet. Please configure fields in Predefine first.
                 </div>
               )}
 

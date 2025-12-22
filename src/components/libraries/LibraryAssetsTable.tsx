@@ -31,13 +31,13 @@ export function LibraryAssetsTable({
     let message: string;
     if (!hasProperties && !hasRows) {
       message =
-        '尚未配置任何属性或资产，请先在 Predefine 页面配置字段并创建至少一个资产。';
+        'No properties or assets configured yet. Please configure fields in Predefine and create at least one asset.';
     } else if (!hasProperties && hasRows) {
       message =
-        '当前 Library 已有资产，但尚未配置字段定义，请在 Predefine 页面补充字段。';
+        'This Library has assets but no field definitions yet. Please add fields in Predefine.';
     } else {
       message =
-        '当前 Library 已配置字段，但尚未创建任何资产，请先创建资产再查看表格。';
+        'This Library has field definitions but no assets yet. Please create assets to view the table.';
     }
 
     return (

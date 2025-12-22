@@ -24,7 +24,7 @@ export function FieldForm({ initialField, onSubmit, onCancel, disabled }: FieldF
     }
   );
   const [showSlashMenu, setShowSlashMenu] = useState(false);
-  // 是否已经通过 slash 选择过 data type，用来控制占位符显示
+  // Whether data type has been selected via slash, used to control placeholder display
   const [dataTypeSelected, setDataTypeSelected] = useState(!!initialField);
   const inputRef = useRef<any>(null);
   const dataTypeInputRef = useRef<any>(null);

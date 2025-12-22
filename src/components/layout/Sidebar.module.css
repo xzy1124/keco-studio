@@ -177,6 +177,26 @@
   padding: 0 1rem;
 }
 
+.loadingAfterCreate {
+  color: #8726EE;
+  font-size: 0.85rem;
+  padding: 0.5rem 1rem;
+  background-color: #f3e8ff;
+  margin: 0 0.75rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
 .error {
   color: #dc2626;
   font-size: 0.85rem;
@@ -279,7 +299,7 @@
   min-width: 0;
   box-sizing: border-box;
   width: 0; /* Force flex to calculate width correctly */
-  position: relative; /* 为绝对定位的itemActions提供定位上下文 */
+  position: relative; /* Provide positioning context for absolutely positioned itemActions */
 }
 
 /* Add left padding to leaf nodes (library and create button) to align with folder icon */
@@ -320,7 +340,7 @@
 
 /* Ensure itemText in tree node has padding to avoid overlap with delete button */
 .tree :global(.ant-tree-node-content-wrapper) .itemText {
-  padding-right: 2rem; /* 为删除按钮留出空间，避免文字重叠 */
+  padding-right: 2rem; /* Reserve space for delete button to avoid text overlap */
 }
 
 .tree :global(.ant-tree-node-content-wrapper:hover) {
@@ -380,7 +400,7 @@
   box-shadow: none !important;
 }
 
-/* 移除所有可能的阴影方块伪元素 */
+/* Remove all possible shadow square pseudo-elements */
 .tree :global(.ant-tree-switcher)::before,
 .tree :global(.ant-tree-switcher)::after {
   display: none !important;
@@ -446,7 +466,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-right: 2rem; /* 为删除按钮留出空间，避免文字重叠 */
+  padding-right: 2rem; /* Reserve space for delete button to avoid text overlap */
 }
 
 .itemActions {
@@ -464,7 +484,7 @@
 /* Total distance from sidebar right edge = 0.75rem (item margin) + 0.75rem (right offset) = 1.5rem */
 .item .itemActions {
   position: absolute;
-  right: 0.75rem; /* 距离item右边界0.75rem，距离sidebar右边界1.5rem（0.75rem margin + 0.75rem right） */
+  right: 0.75rem; /* 0.75rem from item right edge, 1.5rem from sidebar right edge (0.75rem margin + 0.75rem right) */
   top: 50%;
   transform: translateY(-50%);
   margin-left: 0;
@@ -481,7 +501,7 @@
 
 .tree :global(.ant-tree-node-content-wrapper) .itemActions {
   position: absolute;
-  right: 0.75rem; /* 距离content-wrapper右边界0.75rem，距离sidebar右边界1.5rem（0.75rem margin + 0.75rem right） */
+  right: 0.75rem; /* 0.75rem from content-wrapper right edge, 1.5rem from sidebar right edge (0.75rem margin + 0.75rem right) */
   top: 50%;
   transform: translateY(-50%);
   margin-left: 0;

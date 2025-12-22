@@ -41,13 +41,14 @@ export default function PredefinePage() {
   const [isCreatingNewSection, setIsCreatingNewSection] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [loadingAfterSave, setLoadingAfterSave] = useState(false);
 
   const activeSection = useMemo(
     () => sections.find((s) => s.id === activeSectionId) || null,
     [sections, activeSectionId]
   );
 
-  // 加载当前 library 信息（名称、描述），用于页面标题显示
+  // Load current library info (name, description) for page title display
   useEffect(() => {
     if (!libraryId) return;
 
@@ -56,7 +57,7 @@ export default function PredefinePage() {
         const lib = await getLibrary(supabase, libraryId);
         setLibrary(lib);
       } catch (e) {
-        // 仅用于标题展示，失败时忽略即可
+        // Only used for title display, ignore on failure
         console.error('Failed to load library info', e);
       }
     };
@@ -191,18 +192,22 @@ export default function PredefinePage() {
       // Use incremental update to preserve field IDs and asset data
       await saveSchemaIncremental(supabase, libraryId, sectionsToSave);
 
-      message.success('Saved successfully');
+      message.success('Saved successfully, loading...');
 
       // If creating new section, exit creation mode and reload sections
       if (isCreatingNewSection) {
+        setLoadingAfterSave(true);
         setIsCreatingNewSection(false);
         const loadedSections = await reloadSections();
         if (loadedSections && loadedSections.length > 0) {
           setActiveSectionId(loadedSections[loadedSections.length - 1].id);
         }
+        setLoadingAfterSave(false);
       } else {
         // Reload to sync with database
+        setLoadingAfterSave(true);
         await reloadSections();
+        setLoadingAfterSave(false);
       }
     } catch (e: any) {
       message.error(e?.message || 'Failed to save');
@@ -422,6 +427,12 @@ export default function PredefinePage() {
               {errors.map((err, idx) => (
                 <div key={idx}>{err}</div>
               ))}
+            </div>
+          )}
+
+          {loadingAfterSave && (
+            <div className={styles.loadingAfterSave}>
+              Section saved, loading results...
             </div>
           )}
 

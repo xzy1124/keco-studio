@@ -1,4 +1,4 @@
-/* 让 FieldForm 的整体样式与 FieldItem 保持一致的行样式 */
+/* Keep FieldForm's overall style consistent with FieldItem's row style */
 .addFieldContainer {
   display: flex;
   align-items: center;

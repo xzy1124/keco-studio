@@ -24,7 +24,7 @@ export function NewSectionForm({ onCancel, onSave, saving, isFirstSection = fals
   const [fields, setFields] = useState<FieldConfig[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
 
-  // 如果是第一个section，初始化时自动添加mandatory的name字段
+  // If this is the first section, automatically add mandatory name field on initialization
   useEffect(() => {
     if (isFirstSection && fields.length === 0) {
       const nameField: FieldConfig = {
@@ -61,11 +61,11 @@ export function NewSectionForm({ onCancel, onSave, saving, isFirstSection = fals
   };
 
   const handleChangeField = (fieldId: string, fieldData: Omit<FieldConfig, 'id'>) => {
-    // 如果是第一个section的mandatory name字段，不允许修改label和dataType
+    // If this is the mandatory name field of the first section, don't allow modifying label and dataType
     if (isFirstSection) {
       const field = fields.find((f) => f.id === fieldId);
       if (field && field.label === 'name' && field.dataType === 'string') {
-        // 只允许修改required属性，不允许修改label和dataType
+        // Only allow modifying required property, don't allow modifying label and dataType
         const parsed = fieldSchema.safeParse({
           ...fieldData,
           label: 'name',

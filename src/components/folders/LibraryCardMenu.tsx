@@ -60,8 +60,8 @@ export function LibraryCardMenu({
       const menu = menuRef.current;
       if (!menu) return;
 
-      // 窗口上边界和三个点框线下边界重合
-      // 窗口右边界和三个点右边界在一条竖直线上
+      // Window top edge aligns with three-dot button bottom edge
+      // Window right edge aligns with three-dot button right edge on a vertical line
       const top = anchorRect.bottom;
       const menuWidth = menu.offsetWidth || menu.getBoundingClientRect().width;
       const left = anchorRect.right - menuWidth;
@@ -71,7 +71,7 @@ export function LibraryCardMenu({
       menu.style.right = 'auto';
     };
 
-    // 使用 requestAnimationFrame 确保菜单已渲染并可以获取宽度
+    // Use requestAnimationFrame to ensure menu is rendered and width can be obtained
     requestAnimationFrame(() => {
       updatePosition();
     });

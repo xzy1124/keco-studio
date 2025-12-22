@@ -10,7 +10,7 @@ import styles from './FieldItem.module.css';
 
 interface FieldItemProps {
   field: FieldConfig;
-  /** 直接在行内编辑字段时，同步变更到上层 */
+  /** Sync changes to parent when editing field inline */
   onChangeField: (fieldId: string, data: Omit<FieldConfig, 'id'>) => void;
   onDelete: (fieldId: string) => void;
   isFirst?: boolean;
@@ -36,7 +36,7 @@ export function FieldItem({
   };
 
   const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // 如果是mandatory的name字段，不允许修改label
+    // If this is the mandatory name field, don't allow modifying label
     if (isMandatoryNameField) {
       return;
     }
@@ -48,7 +48,7 @@ export function FieldItem({
   };
 
   const handleSlashMenuSelect = (dataType: FieldType) => {
-    // 如果是mandatory的name字段，不允许修改type
+    // If this is the mandatory name field, don't allow modifying type
     if (isMandatoryNameField) {
       setShowSlashMenu(false);
       return;
@@ -68,7 +68,7 @@ export function FieldItem({
   };
 
   const handleDataTypeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // 如果是mandatory的name字段，不允许打开slash menu
+    // If this is the mandatory name field, don't allow opening slash menu
     if (isMandatoryNameField) {
       return;
     }

@@ -51,6 +51,7 @@ export default function NewAssetPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [navigating, setNavigating] = useState(false);
 
   const sections = useMemo(() => {
     const map: Record<string, FieldDef[]> = {};
@@ -174,11 +175,19 @@ export default function NewAssetPage() {
         if (valErr) throw valErr;
       }
 
-      setSaveSuccess('Asset created');
+      setSaveSuccess('Asset created successfully! Loading asset page...');
       setValues({});
+      setNavigating(true);
 
-      // Navigate to edit page for further changes
-      router.push(`/${projectId}/${libraryId}/${assetId}`);
+      // Dispatch event to notify Sidebar to refresh assets
+      window.dispatchEvent(new CustomEvent('assetCreated', {
+        detail: { libraryId, assetId }
+      }));
+
+      // Navigate to edit page for further changes with a slight delay to show success message
+      setTimeout(() => {
+        router.push(`/${projectId}/${libraryId}/${assetId}`);
+      }, 500);
     } catch (e: any) {
       setSaveError(e?.message || 'Failed to create asset');
     } finally {
@@ -232,10 +241,10 @@ export default function NewAssetPage() {
               {userProfile && (
                 <button
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={saving || navigating}
                   className={styles.primaryButton}
                 >
-                  {saving ? 'Saving...' : 'Create asset'}
+                  {navigating ? 'Loading...' : saving ? 'Saving...' : 'Create asset'}
                 </button>
               )}
             </div>
@@ -250,7 +259,7 @@ export default function NewAssetPage() {
               <div className={styles.fieldsContainer}>
                 {sectionKeys.length === 0 && (
                   <div className={styles.emptyFieldsMessage}>
-                    还没有表头定义，请先在 Predefine 设置字段。
+                    No field definitions yet. Please configure fields in Predefine first.
                   </div>
                 )}
 
