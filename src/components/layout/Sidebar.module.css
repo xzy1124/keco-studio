@@ -261,19 +261,24 @@
   position: relative;
   display: flex;
   align-items: stretch;
-  min-height: 36px;
+  height: 40px;
   width: 100%;
+}
+
+/* Remove any before pseudo-elements that might cause gaps */
+.tree :global(.ant-tree-treenode)::before {
+  display: none !important;
 }
 
 /* Add divider line that spans the full width of the sidebar */
 .tree :global(.ant-tree-treenode)::after {
   content: '';
   position: absolute;
-  bottom: 0;
+  bottom: -5px;
   left: 0;
   right: 0;
   height: 1px;
-  background-color: #e2e8f0;
+  background-color: #f1f5f9;
 }
 
 /* Remove border from last node */
@@ -281,14 +286,32 @@
   display: none;
 }
 
+/* Hide all dividers first for folder and asset nodes */
+.tree :global(.ant-tree-treenode[data-node-key^="folder-"])::after,
+.tree :global(.ant-tree-treenode[data-node-key^="asset-"])::after {
+  display: none;
+}
+
+/* Re-enable divider for folder-create and add-asset (buttons) */
+.tree :global(.ant-tree-treenode[data-node-key^="folder-create-"])::after,
+.tree :global(.ant-tree-treenode[data-node-key^="add-asset-"])::after {
+  display: block !important;
+  background-color: #f1f5f9;
+}
+
+/* Hide divider for selected and hovered nodes */
+.tree :global(.ant-tree-treenode-selected)::after,
+.tree :global(.ant-tree-treenode:hover)::after {
+  display: none !important;
+}
+
 .tree :global(.ant-tree-node-content-wrapper) {
-  padding: 0.5rem 0.75rem;
+  padding: 0 0.75rem;
   border-radius: 0;
   flex: 1 1 auto;
-  margin-left: 0;
-  margin-right: 0;
+  margin: 0;
   transition: background-color 0.2s;
-  min-height: 36px;
+  height: 100%;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -302,8 +325,9 @@
 .tree :global(.ant-tree-treenode[data-node-key*="library-"]) .ant-tree-node-content-wrapper,
 .tree :global(.ant-tree-treenode[data-node-key*="asset-"]) .ant-tree-node-content-wrapper,
 .tree :global(.ant-tree-treenode[data-node-key*="folder-create-"]) .ant-tree-node-content-wrapper {
-  padding-left: calc(0.75rem + 24px); /* 0.75rem original padding + 24px switcher width */
+  padding-left: calc(0.75rem + 12px); /* 继续减少使图标对齐 */
 }
+
 
 /* Ensure add-asset nodes have minimum width to prevent text from appearing word by word */
 .tree :global(.ant-tree-treenode[data-node-key*="add-asset-"]) .ant-tree-node-content-wrapper {
@@ -338,9 +362,14 @@
   padding-right: 2rem; /* Reserve space for delete button to avoid text overlap */
 }
 
-.tree :global(.ant-tree-node-content-wrapper:hover) {
+/* Hover state - background covers entire row */
+.tree :global(.ant-tree-treenode:hover) {
   background-color: #f8fafc;
   border-radius: 0.5rem;
+}
+
+.tree :global(.ant-tree-node-content-wrapper:hover) {
+  background-color: transparent;
 }
 
 /* Selected state: full-width background from content to end (like project itemActive) */
@@ -353,13 +382,22 @@
   background-color: transparent !important;
 }
 
-/* Background starts from content (not indent) and covers to the end with rounded corners */
-/* Extend to match project item right edge (sidebar right - 0.75rem) */
+/* Background for selected nodes - covers entire row */
+.tree :global(.ant-tree-treenode-selected) {
+  background-color: #fff1f2 !important;
+  border-radius: 0.5rem !important;
+}
+
 .tree :global(.ant-tree-treenode-selected > .ant-tree-node-content-wrapper),
 .tree :global(.ant-tree-node-content-wrapper.ant-tree-node-selected) {
-  background-color: #fff1f2 !important;
+  background-color: transparent !important;
   color: #e11d48 !important;
-  border-radius: 0.5rem !important;
+}
+
+/* Ensure switcher is above the background */
+.tree :global(.ant-tree-treenode-selected .ant-tree-switcher) {
+  position: relative;
+  z-index: 1;
 }
 
 /* Ensure indent area is transparent (background starts from content, not indent) */
@@ -369,7 +407,7 @@
 
 
 .tree :global(.ant-tree-indent-unit) {
-  width: 12px;
+  width: 0px; /* 移除缩进，使子节点与父节点对齐 */
 }
 
 /* Hide expand/collapse icon for library nodes (isLeaf: true) */
@@ -529,7 +567,9 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  width: 24px;
   height: 20px;
+  justify-content: center;
 }
 
 .libraryIconPart {
@@ -572,6 +612,7 @@
   display: flex;
   align-items: center;
   margin: 0;
+  padding-left: 0; /* 🎯 尝试调整按钮本身的 padding */
   box-sizing: border-box;
 }
 
@@ -594,7 +635,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  width: 24px;
   height: 18px;
   flex-shrink: 0;
 }
@@ -693,13 +734,13 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border: 2px solid #8b5cf6;
-  color: #8b5cf6;
+  border: 2px solid #8726EE;
+  color: #8726EE;
   background-color: transparent;
   font-size: 12px;
   font-weight: 600;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-style: italic;
+  font-style: normal;
   flex-shrink: 0;
   line-height: 1;
 }
@@ -713,7 +754,9 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  width: 24px;
   height: 20px;
+  justify-content: center;
 }
 
 .libraryIconPart {
@@ -756,6 +799,7 @@
   display: flex;
   align-items: center;
   margin: 0;
+  padding-left: 0; /* 🎯 尝试调整按钮本身的 padding */
   box-sizing: border-box;
 }
 
@@ -778,7 +822,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  width: 24px;
   height: 18px;
   flex-shrink: 0;
 }

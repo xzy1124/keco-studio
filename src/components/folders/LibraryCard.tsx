@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import Image from 'next/image';
+import { Tooltip } from 'antd';
 import { Library } from '@/lib/services/libraryService';
 import libraryIconLeft from "@/app/assets/images/libraryIconLeft.svg";
 import libraryIconRight from "@/app/assets/images/libraryIconRight.svg";
@@ -113,18 +114,24 @@ export function LibraryCard({
             </div>
           </div>
           <div className={styles.cardActions}>
-            <button
-              className={styles.actionButton}
-              onClick={handleSettingsClick}
-              aria-label="Library settings"
+            <Tooltip
+              title="Predefine asset here"
+              placement="bottom"
+              color="#8B5CF6"
             >
-              <Image
-                src={predefineSettingIcon}
-                alt="Settings"
-                width={22}
-                height={22}
-              />
-            </button>
+              <button
+                className={styles.actionButton}
+                onClick={handleSettingsClick}
+                aria-label="Library settings"
+              >
+                <Image
+                  src={predefineSettingIcon}
+                  alt="Settings"
+                  width={22}
+                  height={22}
+                />
+              </button>
+            </Tooltip>
             <button
               ref={moreButtonRef}
               className={`${styles.actionButton} ${isMenuOpen ? styles.actionButtonActive : ''}`}

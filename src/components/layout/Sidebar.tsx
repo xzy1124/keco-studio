@@ -459,18 +459,24 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                   <span className={styles.itemText}>{lib.name}</span>
                 </div>
                 <div className={styles.itemActions}>
-                  <button
-                    className={styles.iconButton}
-                    aria-label="Library sections"
-                    onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
+                  <Tooltip
+                    title="Predefine asset here"
+                    placement="top"
+                    color="#8B5CF6"
                   >
-                    <Image
-                      src={predefineSettingIcon}
-                      alt="Predefine"
-                      width={22}
-                      height={22}
-                    />
-                  </button>
+                    <button
+                      className={styles.iconButton}
+                      aria-label="Library sections"
+                      onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
+                    >
+                      <Image
+                        src={predefineSettingIcon}
+                        alt="Predefine"
+                        width={22}
+                        height={22}
+                      />
+                    </button>
+                  </Tooltip>
                   <button
                     className={styles.iconButton}
                     aria-label="Delete library"
@@ -555,7 +561,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
               <Image
                 src={folderIcon}
                 alt="Folder"
-                width={22}
+                width={24}
                 height={18}
                 className={styles.itemIcon}
               />
@@ -612,18 +618,24 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
               <span className={styles.itemText}>{lib.name}</span>
             </div>
             <div className={styles.itemActions}>
-              <button
-                className={styles.iconButton}
-                aria-label="Library sections"
-                onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
+              <Tooltip
+                title="Predefine asset here"
+                placement="top"
+                color="#8B5CF6"
               >
-                <Image
-                  src={predefineSettingIcon}
-                  alt="Predefine"
-                  width={18}
-                  height={18}
-                />
-              </button>
+                <button
+                  className={styles.iconButton}
+                  aria-label="Library sections"
+                  onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
+                >
+                  <Image
+                    src={predefineSettingIcon}
+                    alt="Predefine"
+                    width={18}
+                    height={18}
+                  />
+                </button>
+              </Tooltip>
               <button
                 className={styles.iconButton}
                 aria-label="Delete library"
