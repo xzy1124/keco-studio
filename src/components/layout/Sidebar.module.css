@@ -305,6 +305,7 @@
   padding-left: calc(0.75rem + 24px); /* 0.75rem original padding + 24px switcher width */
 }
 
+
 /* Ensure add-asset nodes have minimum width to prevent text from appearing word by word */
 .tree :global(.ant-tree-treenode[data-node-key*="add-asset-"]) .ant-tree-node-content-wrapper {
   min-width: 120px !important; /* Ensure enough width for "Add New Asset" text */
@@ -529,7 +530,9 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  width: 24px;
   height: 20px;
+  justify-content: center;
 }
 
 .libraryIconPart {
@@ -572,6 +575,7 @@
   display: flex;
   align-items: center;
   margin: 0;
+  padding-left: 0; /* 🎯 尝试调整按钮本身的 padding */
   box-sizing: border-box;
 }
 
@@ -594,7 +598,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  width: 24px;
   height: 18px;
   flex-shrink: 0;
 }
@@ -713,7 +717,9 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  width: 24px;
   height: 20px;
+  justify-content: center;
 }
 
 .libraryIconPart {
@@ -756,6 +762,7 @@
   display: flex;
   align-items: center;
   margin: 0;
+  padding-left: 0; /* 🎯 尝试调整按钮本身的 padding */
   box-sizing: border-box;
 }
 
@@ -778,7 +785,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  width: 24px;
   height: 18px;
   flex-shrink: 0;
 }
