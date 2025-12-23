@@ -307,10 +307,17 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         .eq('id', assetId);
       if (error) throw error;
       await fetchAssets(libraryId);
+      
+      // Check if currently viewing this asset, if so navigate to library page
+      const parts = pathname.split("/").filter(Boolean);
+      // URL format: /[projectId]/[libraryId]/[assetId]
+      if (parts.length >= 3 && parts[2] === assetId && currentIds.projectId) {
+        router.push(`/${currentIds.projectId}/${libraryId}`);
+      }
     } catch (err) {
       console.error('Failed to delete asset', err);
     }
-  }, [supabase, fetchAssets]);
+  }, [supabase, fetchAssets, pathname, currentIds.projectId, router]);
 
   const handleLibraryDelete = useCallback(async (libraryId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -328,7 +335,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         detail: { folderId: deletedFolderId, libraryId, projectId: currentIds.projectId }
       }));
       
-      // If the deleted library is currently being viewed (or viewing an asset in it), navigate to project page
+      // If the deleted library is currently being viewed (including library page, predefine page, new asset page, or any asset in it), navigate to project page
       if (currentIds.libraryId === libraryId && currentIds.projectId) {
         router.push(`/${currentIds.projectId}`);
       }
@@ -341,12 +348,23 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     e.stopPropagation();
     if (!window.confirm('Delete this folder? All libraries and subfolders under it will be removed.')) return;
     try {
+      // Check if any libraries under this folder are being viewed
+      const librariesInFolder = libraries.filter(lib => lib.folder_id === folderId);
+      const isViewingLibraryInFolder = librariesInFolder.some(lib => lib.id === currentIds.libraryId);
+      
       await deleteFolder(supabase, folderId);
       fetchFoldersAndLibraries(currentIds.projectId);
+      
+      // If currently viewing the folder page or a library in this folder, navigate to project page
+      if (currentIds.folderId === folderId || isViewingLibraryInFolder) {
+        if (currentIds.projectId) {
+          router.push(`/${currentIds.projectId}`);
+        }
+      }
     } catch (err: any) {
       setError(err?.message || 'Failed to delete folder');
     }
-  }, [supabase, currentIds.projectId, fetchFoldersAndLibraries]);
+  }, [supabase, currentIds.projectId, currentIds.folderId, currentIds.libraryId, libraries, fetchFoldersAndLibraries, router]);
 
   const treeData: DataNode[] = useMemo(() => {
     if (!currentIds.projectId) return [];
