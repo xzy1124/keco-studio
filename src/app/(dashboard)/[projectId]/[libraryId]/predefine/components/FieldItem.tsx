@@ -10,6 +10,8 @@ import predefineTypeSwitchIcon from '@/app/assets/images/predefineTypeSwitchIcon
 import { useSupabase } from '@/lib/SupabaseContext';
 import { useParams } from 'next/navigation';
 import { listLibraries, type Library } from '@/lib/services/libraryService';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import styles from './FieldItem.module.css';
 
 interface FieldItemProps {
@@ -20,6 +22,7 @@ interface FieldItemProps {
   isFirst?: boolean;
   disabled?: boolean;
   isMandatoryNameField?: boolean;
+  isDraggable?: boolean;
 }
 
 export function FieldItem({
@@ -29,6 +32,7 @@ export function FieldItem({
   isFirst = false,
   disabled,
   isMandatoryNameField = false,
+  isDraggable = false,
 }: FieldItemProps) {
   const supabase = useSupabase();
   const params = useParams();
@@ -44,6 +48,25 @@ export function FieldItem({
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const configMenuRef = useRef<HTMLDivElement>(null);
   const configButtonRef = useRef<HTMLButtonElement>(null);
+  
+  // Set up sortable behavior for drag-and-drop
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ 
+    id: field.id,
+    disabled: !isDraggable,
+  });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
 
   const getDataTypeLabel = (value: FieldType) => {
     const option = FIELD_TYPE_OPTIONS.find((opt) => opt.value === value);
@@ -214,8 +237,17 @@ export function FieldItem({
   }, [showConfigMenu, field.dataType, projectId, currentLibraryId, supabase]);
 
   return (
-    <div className={`${styles.fieldItem} ${disabled ? styles.disabled : ''}`}>
-      <div className={styles.dragHandle}>
+    <div 
+      ref={setNodeRef}
+      style={style}
+      className={`${styles.fieldItem} ${disabled ? styles.disabled : ''}`}
+    >
+      <div 
+        className={styles.dragHandle}
+        {...attributes}
+        {...listeners}
+        style={{ cursor: isDraggable ? 'grab' : 'default' }}
+      >
         <Image src={predefineDragIcon} alt="Drag" width={16} height={16} />
       </div>
       <div className={styles.fieldInfo}>

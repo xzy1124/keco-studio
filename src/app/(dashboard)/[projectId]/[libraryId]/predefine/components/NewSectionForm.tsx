@@ -92,6 +92,11 @@ export function NewSectionForm({ onCancel, onSave, saving, isFirstSection = fals
     setErrors([]);
   };
 
+  const handleReorderFields = (newOrder: FieldConfig[]) => {
+    setFields(newOrder);
+    setErrors([]);
+  };
+
   const handleSave = useCallback(async () => {
     const trimmedName = sectionName.trim();
     if (!trimmedName) {
@@ -184,6 +189,7 @@ export function NewSectionForm({ onCancel, onSave, saving, isFirstSection = fals
           fields={fields}
           onChangeField={handleChangeField}
           onDeleteField={handleDeleteField}
+          onReorderFields={handleReorderFields}
           disabled={saving}
           isFirstSection={isFirstSection}
         />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { z } from 'zod';
 import { useSupabase } from '@/lib/SupabaseContext';
 import { useParams } from 'next/navigation';
@@ -47,7 +47,7 @@ export default function PredefinePage() {
   // Track temporary section name edits (only applied on save)
   const [tempSectionNames, setTempSectionNames] = useState<Map<string, string>>(new Map());
   // Track if we've already checked for auto-enter new section mode (to avoid re-triggering)
-  const [autoEnterChecked, setAutoEnterChecked] = useState(false);
+  const autoEnterChecked = useRef(false);
 
   const activeSection = useMemo(
     () => sections.find((s) => s.id === activeSectionId) || null,
@@ -71,37 +71,36 @@ export default function PredefinePage() {
     fetchLibrary();
   }, [libraryId, supabase]);
 
-  // Set first section as active when sections load or when activeSectionId becomes invalid
+  // Consolidated effect: Set active section and handle creation mode initialization
   useEffect(() => {
-    // Only update active section after loading is complete
+    // Wait for initial data load to complete
     if (sectionsLoading) return;
     
-    if (sections.length > 0) {
-      // If no active section or active section no longer exists, set first section as active
-      if (!activeSectionId || !sections.find((s) => s.id === activeSectionId)) {
-        setActiveSectionId(sections[0].id);
-      }
-      // If we're in creating mode but sections now exist, exit creating mode
-      if (isCreatingNewSection) {
-        setIsCreatingNewSection(false);
+    // Only run initialization check once
+    if (!autoEnterChecked.current) {
+      autoEnterChecked.current = true;
+      
+      if (sections.length === 0) {
+        // No sections exist, auto-enter creation mode
+        setIsCreatingNewSection(true);
+      } else {
+        // Sections exist, set first as active if needed
+        if (!activeSectionId || !sections.find((s) => s.id === activeSectionId)) {
+          setActiveSectionId(sections[0].id);
+        }
       }
     } else {
-      // If no sections, clear activeSectionId
-      setActiveSectionId(null);
-    }
-  }, [sections, activeSectionId, sectionsLoading, isCreatingNewSection]);
-
-  // Auto-enter new section creation mode when predefine template is empty (only after data is loaded)
-  useEffect(() => {
-    // Only check once after loading completes and we haven't checked yet
-    if (!sectionsLoading && !autoEnterChecked) {
-      setAutoEnterChecked(true);
-      // If no sections exist, auto-enter new section creation mode
-      if (sections.length === 0) {
-        setIsCreatingNewSection(true);
+      // After initialization, only update active section if invalid
+      // Do NOT automatically exit creation mode - let user explicitly switch tabs
+      if (sections.length > 0) {
+        if (!activeSectionId || !sections.find((s) => s.id === activeSectionId)) {
+          setActiveSectionId(sections[0].id);
+        }
+      } else {
+        setActiveSectionId(null);
       }
     }
-  }, [sectionsLoading, sections.length, autoEnterChecked]);
+  }, [sections, sectionsLoading, activeSectionId]);
 
   const startCreatingNewSection = useCallback(() => {
     setIsCreatingNewSection(true);
@@ -157,6 +156,15 @@ export default function PredefinePage() {
         s.id === sectionId ? { ...s, fields: s.fields.filter((f) => f.id !== fieldId) } : s
       )
     );
+  };
+
+  const handleReorderFields = (sectionId: string, newFieldOrder: FieldConfig[]) => {
+    setSections((prev) =>
+      prev.map((s) =>
+        s.id === sectionId ? { ...s, fields: newFieldOrder } : s
+      )
+    );
+    setErrors([]);
   };
 
   const handleSaveNewSection = async (newSection: { name: string; fields: FieldConfig[] }) => {
@@ -424,6 +432,7 @@ export default function PredefinePage() {
           fields={section.fields}
           onChangeField={(fieldId, data) => handleChangeField(section.id, fieldId, data)}
           onDeleteField={(fieldId) => handleDeleteField(section.id, fieldId)}
+          onReorderFields={(newOrder) => handleReorderFields(section.id, newOrder)}
           disabled={saving}
           isFirstSection={sectionIndex === 0}
         />
