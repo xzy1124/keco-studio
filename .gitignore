@@ -11,3 +11,6 @@ playwright/.cache/
 .env.*
 .DS_Store
 Thumbs.db
+.env.local
+/keco-studio/
+supabase_linux_amd64.tar.gz

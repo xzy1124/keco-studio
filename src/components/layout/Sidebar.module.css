@@ -650,3 +650,186 @@
   display: inline-block !important; /* Ensure text renders as a single unit */
 }
 
+.iconButton {
+  background: none;
+  border: none;
+  color: #cbd5e1;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 1.25rem;
+  line-height: 1;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.iconButton:hover {
+  background: #f8fafc;
+  color: #475569;
+}
+
+/* Info icon styles for project description tooltip */
+.infoIconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  cursor: help;
+  transition: opacity 0.2s;
+}
+
+.infoIconWrapper:hover {
+  opacity: 0.7;
+}
+
+.infoIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #8b5cf6;
+  color: #8b5cf6;
+  background-color: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-style: italic;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+
+.itemIcon {
+  flex-shrink: 0;
+}
+
+.libraryIconContainer {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 20px;
+}
+
+.libraryIconPart {
+  display: block;
+  flex-shrink: 0;
+}
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 0;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.itemMain {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+
+.createButton {
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #64748b;
+  transition: background-color 0.2s, color 0.2s;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.createButton:hover {
+  background-color: #f8fafc;
+  color: #334155;
+}
+
+.createButtonText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.plusIcon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.plusHorizontal,
+.plusVertical {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Prevent create button node from being selected/highlighted */
+.tree :global(.ant-tree-node-content-wrapper) button.createButton {
+  width: 100%;
+  height: 100%;
+}
+
+/* Override tree node selection styles for create button nodes */
+.tree :global(.ant-tree-treenode[data-node-key*="folder-create-"]) .ant-tree-node-content-wrapper:hover {
+  background-color: transparent !important;
+}
+
+.tree :global(.ant-tree-treenode[data-node-key*="folder-create-"]) .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  background-color: transparent !important;
+}
+
+.itemAddIcon {
+  font-size: 0.9rem;
+  color: #9ca3af;
+}
+
+.itemAddText {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0; /* Prevent text from shrinking during animation */
+}
+
+/* Ensure itemMain in add-asset nodes has enough width to display text fully */
+.tree :global(.ant-tree-treenode[data-node-key*="add-asset-"]) .itemMain {
+  min-width: max-content !important; /* Ensure text displays fully without word-by-word appearance */
+  width: auto !important; /* Override any width constraints */
+  overflow: visible !important; /* Ensure text is not clipped during animation */
+}
+
+/* Ensure itemAddText in add-asset nodes renders immediately with full width */
+.tree :global(.ant-tree-treenode[data-node-key*="add-asset-"]) .itemAddText {
+  min-width: max-content !important;
+  width: auto !important;
+  display: inline-block !important; /* Ensure text renders as a single unit */
+}

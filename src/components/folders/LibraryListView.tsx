@@ -9,8 +9,12 @@ import moreOptionsIcon from "@/app/assets/images/moreOptionsIcon.svg";
 import { LibraryCardMenu } from './LibraryCardMenu';
 import styles from './LibraryListView.module.css';
 
+type LibraryWithAssetCount = Library & {
+  assetCount?: number;
+};
+
 type LibraryListViewProps = {
-  libraries: Library[];
+  libraries: LibraryWithAssetCount[];
   projectId: string;
   onLibraryClick?: (libraryId: string) => void;
   onSettingsClick?: (libraryId: string, e: React.MouseEvent) => void;

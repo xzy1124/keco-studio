@@ -16,7 +16,7 @@ import searchIcon from "@/app/assets/images/searchIcon.svg";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Tree } from "antd";
+import { Tree, Tooltip } from "antd";
 import { DataNode, EventDataNode } from "antd/es/tree";
 import { useSupabase } from "@/lib/SupabaseContext";
 import { NewProjectModal } from "@/components/projects/NewProjectModal";
@@ -957,6 +957,22 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                 />
                 <span className={styles.itemText}>{project.name}</span>
                 <span className={styles.itemActions}>
+                  {project.description && (
+                    <Tooltip
+                      title={project.description}
+                      placement="top"
+                      styles={{
+                        root: { maxWidth: '300px' }
+                      }}
+                    >
+                      <div
+                        className={styles.infoIconWrapper}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className={styles.infoIcon}>i</span>
+                      </div>
+                    </Tooltip>
+                  )}
                   <button
                     className={styles.iconButton}
                     aria-label="Delete project"
@@ -1064,5 +1080,4 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     </aside>
   );
 }
-
 
