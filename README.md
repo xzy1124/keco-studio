@@ -1,177 +1,218 @@
-# Supabase CLI
+下面是你提供内容的**完整英文版 README.md**，结构、编号和语义与原中文版本严格对应，适合直接作为项目的英文说明文件使用。
 
-[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
-](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
+---
 
-[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
+# Keco Studio Local Deployment Guide (macOS / Windows)
 
-This repository contains all the functionality for Supabase CLI.
+This document describes how to locally deploy and run the `keco-studio` project on **macOS or Windows**.
 
-- [x] Running Supabase locally
-- [x] Managing database migrations
-- [x] Creating and deploying Supabase Functions
-- [x] Generating types directly from your database schema
-- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
+---
 
-## Getting started
+## 1. Prerequisites
 
-### Install the CLI
+### 1. Install Docker Desktop (Required)
 
-Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
+Supabase relies on Docker. Please install Docker Desktop and ensure it is running properly.
+
+* Official Docker download:
+  [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+
+---
+
+## 2. Download the Source Code
+
+Project repository:
+[https://github.com/Caerulean-ai/keco-studio](https://github.com/Caerulean-ai/keco-studio)
+
+### 1. Create a project directory and open a terminal
+
+* **macOS**: Terminal / iTerm
+* **Windows**: PowerShell / Windows Terminal
 
 ```bash
-npm i supabase --save-dev
+# Create a directory
+mkdir project
+
+# Enter the directory
+cd project
 ```
 
-When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
+---
+
+### 2. Clone the repository and switch branches
+
+```bash
+# Clone the repository
+git clone https://github.com/Caerulean-ai/keco-studio.git
+
+# Enter the project directory
+cd keco-studio
+
+# List all branches
+git branch -a
+
+# Switch to the main branch
+git checkout main
+
+# Pull the latest code
+git pull origin main
+```
+
+#### Common Issues
+
+* **Git is not installed**
+
+  * Git official website:
+    [https://git-scm.com/](https://git-scm.com/)
+
+  * Verify installation:
+
+    ```bash
+    git --version
+    ```
+
+* **Failed to connect to GitHub via HTTPS**
+
+  * Configure SSH access instead:
+    [https://blog.csdn.net/shenyuan12/article/details/108351561](https://blog.csdn.net/shenyuan12/article/details/108351561)
+
+---
+
+## 3. Environment Setup
+
+### 1. Node.js (Required)
+
+It is recommended to install **Node.js LTS (18.x or 20.x)**.
+
+* Official download:
+  [https://nodejs.org/](https://nodejs.org/)
+
+Verify installation:
+
+```bash
+node --version
+npm --version
+```
+
+---
+
+### 2. npm (Upgrade to the latest version)
+
+```bash
+npm install -g npm@latest
+
+npm --version
+```
+
+---
+
+## 4. Running the Project
+
+### 1. Install project dependencies
+
+```bash
+npm install
+```
+
+---
+
+### 2. Start the local Supabase service
+
+```bash
+supabase start
+```
+
+On first run, Docker images will be pulled automatically. This may take several minutes.
+
+After startup, the terminal will output:
+
+* Local Supabase URL
+* anon public key
+
+---
+
+### 3. Configure environment variables
+
+Create or edit the `.env.local` file in the project root directory:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=[Copy the anon key (Publishable value) from the supabase start output]
+```
+
+---
+
+### 4. Database migrations (Optional)
+
+Database migrations are applied automatically when Supabase starts.
+
+To reset the database and reapply migrations manually:
+
+```bash
+supabase db reset
+```
+
+---
+
+### 5. Start the frontend development server
+
+```bash
+npm run dev
+```
+
+Access the application at:
 
 ```
-NODE_OPTIONS=--no-experimental-fetch yarn add supabase
+http://localhost:3000
 ```
 
-> **Note**
-For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
+---
 
-<details>
-  <summary><b>macOS</b></summary>
+### 6. Stop services
 
-  Available via [Homebrew](https://brew.sh). To install:
+```bash
+# Stop the frontend development server
+Ctrl + C
 
-  ```sh
-  brew install supabase/tap/supabase
-  ```
+# Stop Supabase
+supabase stop
+```
 
-  To install the beta release channel:
-  
-  ```sh
-  brew install supabase/tap/supabase-beta
-  brew link --overwrite supabase-beta
-  ```
-  
-  To upgrade:
+---
 
-  ```sh
-  brew upgrade supabase
-  ```
-</details>
+## 5. Frequently Asked Questions (FAQ)
 
-<details>
-  <summary><b>Windows</b></summary>
+### 1. `supabase start` cannot connect to Docker
 
-  Available via [Scoop](https://scoop.sh). To install:
+* Ensure Docker Desktop is running
+* Restart Docker Desktop and try again
 
-  ```powershell
-  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
-  scoop install supabase
-  ```
+---
 
-  To upgrade:
+### 2. Port already in use
 
-  ```powershell
-  scoop update supabase
-  ```
-</details>
+* Make sure no other Supabase or PostgreSQL services are running locally
 
-<details>
-  <summary><b>Linux</b></summary>
-
-  Available via [Homebrew](https://brew.sh) and Linux packages.
-
-  #### via Homebrew
-
-  To install:
-
-  ```sh
-  brew install supabase/tap/supabase
-  ```
-
-  To upgrade:
-
-  ```sh
-  brew upgrade supabase
-  ```
-
-  #### via Linux packages
-
-  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
-
-  ```sh
-  sudo apk add --allow-untrusted <...>.apk
-  ```
-
-  ```sh
-  sudo dpkg -i <...>.deb
-  ```
-
-  ```sh
-  sudo rpm -i <...>.rpm
-  ```
-
-  ```sh
-  sudo pacman -U <...>.pkg.tar.zst
-  ```
-</details>
-
-<details>
-  <summary><b>Other Platforms</b></summary>
-
-  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
-
-  ```sh
-  go install github.com/supabase/cli@latest
-  ```
-
-  Add a symlink to the binary in `$PATH` for easier access:
-
-  ```sh
-  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
-  ```
-
-  This works on other non-standard Linux distros.
-</details>
-
-<details>
-  <summary><b>Community Maintained Packages</b></summary>
-
-  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
-  To install in your working directory:
+* You can run:
 
   ```bash
-  pkgx install supabase
+  supabase stop
   ```
 
-  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
-</details>
+---
 
-### Run the CLI
+### 3. Node.js version incompatibility
 
-```bash
-supabase bootstrap
-```
+* Use **Node.js LTS**
+* Consider using nvm or fnm to manage multiple Node versions
 
-Or using npx:
+---
 
-```bash
-npx supabase bootstrap
-```
+## 6. Notes
 
-The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
+* This project uses the **Next.js + Supabase** tech stack
+* Local Supabase is intended for development and testing only
+* The `.env.local` file should **not** be committed to the repository
 
-## Docs
+---
 
-Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
-
-## Breaking changes
-
-We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
-
-However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
-
-## Developing
-
-To run from source:
-
-```sh
-# Go >= 1.22
-go run . help
-```
