@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { Input, Select, Button } from 'antd';
+import { Input, Select, Button, Modal } from 'antd';
+import Image from 'next/image';
+import { useRouter, useParams } from 'next/navigation';
 import {
   AssetRow,
   PropertyConfig,
   SectionConfig,
 } from '@/lib/types/libraryAssets';
+import assetTableIcon from '@/app/assets/images/AssetTableIcon.svg';
 import styles from './LibraryAssetsTable.module.css';
 
 export type LibraryAssetsTableProps = {
@@ -37,6 +40,14 @@ export function LibraryAssetsTable({
   // Edit mode state: track which row is being edited and its data
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editingRowData, setEditingRowData] = useState<Record<string, any>>({});
+
+  // Modal state for viewing asset details
+  const [selectedAsset, setSelectedAsset] = useState<AssetRow | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Router for navigation
+  const router = useRouter();
+  const params = useParams();
 
   const hasSections = sections.length > 0;
   const hasProperties = properties.length > 0;
@@ -115,6 +126,26 @@ export function LibraryAssetsTable({
     setEditingRowData({});
   };
 
+  // Handle view asset detail
+  const handleViewAssetDetail = (row: AssetRow, e: React.MouseEvent) => {
+    // Check if Ctrl/Cmd key is pressed for opening in new tab
+    if (e.ctrlKey || e.metaKey) {
+      const projectId = params.projectId as string;
+      const libraryId = params.libraryId as string;
+      window.open(`/${projectId}/${libraryId}/${row.id}`, '_blank');
+    } else {
+      // Open modal
+      setSelectedAsset(row);
+      setIsModalOpen(true);
+    }
+  };
+
+  // Handle close modal
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedAsset(null);
+  };
+
   if (!hasProperties) {
     return (
       <div className={styles.tableContainer}>
@@ -168,8 +199,9 @@ export function LibraryAssetsTable({
   const totalColumns = 1 + orderedProperties.length + 1;
 
   return (
-    <div className={styles.tableContainer}>
-      <table className={styles.table}>
+    <>
+      <div className={styles.tableContainer}>
+        <table className={styles.table}>
         <thead>
           {/* First row: Section headers (Basic Info, Visual Info, etc.) */}
           <tr className={styles.headerRowTop}>
@@ -223,7 +255,10 @@ export function LibraryAssetsTable({
                 className={isEditing ? styles.editRow : styles.row}
               >
                 <td className={styles.numberCell}>{index + 1}</td>
-                {orderedProperties.map((property) => {
+                {orderedProperties.map((property, propertyIndex) => {
+                  // Check if this is the first property (name field)
+                  const isNameField = propertyIndex === 0;
+                  
                   if (isEditing) {
                     // Editing mode: show input
                     const editValue = editingRowData[property.key] !== undefined 
@@ -254,10 +289,31 @@ export function LibraryAssetsTable({
                         key={property.id}
                         className={styles.cell}
                       >
-                        {display ? (
-                          display
+                        {isNameField ? (
+                          // Name field: show text + view detail button
+                          <div className={styles.cellContent}>
+                            <span className={styles.cellText}>
+                              {display ? display : <span className={styles.placeholderValue}>—</span>}
+                            </span>
+                            <button
+                              className={styles.viewDetailButton}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewAssetDetail(row, e);
+                              }}
+                              title="View asset details (Ctrl+Click for new tab)"
+                            >
+                              <Image
+                                src={assetTableIcon}
+                                alt="View"
+                                width={20}
+                                height={20}
+                              />
+                            </button>
+                          </div>
                         ) : (
-                          <span className={styles.placeholderValue}>—</span>
+                          // Other fields: show text only
+                          display ? display : <span className={styles.placeholderValue}>—</span>
                         )}
                       </td>
                     );
@@ -373,6 +429,71 @@ export function LibraryAssetsTable({
         </tbody>
       </table>
     </div>
+
+    {/* Asset Detail Modal */}
+    <Modal
+      title={
+        <div className={styles.modalTitle}>
+          <span>Asset Details</span>
+          {selectedAsset && (
+            <span className={styles.modalAssetName}>
+              {selectedAsset.propertyValues[orderedProperties[0]?.key] || 'Untitled'}
+            </span>
+          )}
+        </div>
+      }
+      open={isModalOpen}
+      onCancel={handleCloseModal}
+      footer={[
+        <Button key="close" onClick={handleCloseModal}>
+          Close
+        </Button>,
+        <Button
+          key="open"
+          type="primary"
+          onClick={() => {
+            if (selectedAsset) {
+              const projectId = params.projectId as string;
+              const libraryId = params.libraryId as string;
+              router.push(`/${projectId}/${libraryId}/${selectedAsset.id}`);
+            }
+          }}
+        >
+          Open Full Page
+        </Button>,
+      ]}
+      width={700}
+      className={styles.assetDetailModal}
+    >
+      {selectedAsset && (
+        <div className={styles.modalContent}>
+          {groups.map((group) => (
+            <div key={group.section.id} className={styles.modalSection}>
+              <h3 className={styles.modalSectionTitle}>{group.section.name}</h3>
+              <div className={styles.modalFields}>
+                {group.properties.map((property) => {
+                  const value = selectedAsset.propertyValues[property.key];
+                  const display =
+                    value === null || value === undefined || value === ''
+                      ? '—'
+                      : String(value);
+
+                  return (
+                    <div key={property.id} className={styles.modalField}>
+                      <label className={styles.modalFieldLabel}>
+                        {property.name}:
+                      </label>
+                      <span className={styles.modalFieldValue}>{display}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+    </>
   );
 }
 

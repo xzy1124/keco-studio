@@ -66,13 +66,62 @@
 
 .cell {
   padding: 10px 16px;
-  vertical-align: top;
+  vertical-align: middle;
   font-size: 13px;
   line-height: 1.5;
   color: #111827;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
+}
+
+/* Cell content with view button */
+.cellContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+
+.cellText {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* View detail button (only in name field) */
+.viewDetailButton {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s, background-color 0.2s, transform 0.1s;
+}
+
+/* Show button when hovering over the row */
+.row:hover .viewDetailButton {
+  opacity: 1;
+}
+
+/* Button hover effect */
+.viewDetailButton:hover {
+  background-color: #f1f5f9;
+  opacity: 1 !important;
+}
+
+/* Button active effect */
+.viewDetailButton:active {
+  background-color: #e2e8f0;
+  transform: scale(0.95);
 }
 
 .assetCell {
@@ -249,5 +298,87 @@
 
 .addButton:disabled:hover {
   color: #cbd5e1;
+}
+
+/* Modal styles */
+.assetDetailModal {
+  top: 40px;
+}
+
+.modalTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.modalAssetName {
+  font-size: 16px;
+  font-weight: 500;
+  color: #8b5cf6;
+  padding: 2px 12px;
+  background: #f3e8ff;
+  border-radius: 6px;
+}
+
+.modalContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 16px 0;
+}
+
+.modalSection {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 20px;
+}
+
+.modalSection:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.modalSectionTitle {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 0.05em;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.modalFields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+}
+
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modalFieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: capitalize;
+}
+
+.modalFieldValue {
+  font-size: 14px;
+  color: #0f172a;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
 }
 
