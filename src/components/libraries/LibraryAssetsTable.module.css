@@ -16,10 +16,12 @@
 
 .headerRowTop {
   background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
 }
 
 .headerRowBottom {
   background: #f9fafb;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .headerCell {
@@ -37,9 +39,21 @@
   text-align: center;
   border-left: 1px solid #e2e8f0;
   border-right: 1px solid #e2e8f0;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 700;
   text-transform: uppercase;
-  color: #6b7280;
+  color: #475569;
+  letter-spacing: 0.05em;
+  padding: 14px 16px;
+  background: linear-gradient(to bottom, #f1f5f9, #f8fafc);
+}
+
+.propertyHeaderCell {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 12px 16px;
+  border-left: 1px solid #f1f5f9;
 }
 
 .assetHeaderCell {
@@ -87,9 +101,11 @@
 .numberColumnHeader {
   width: 60px;
   text-align: center;
-  background: #f8fafc;
-  font-weight: 600;
+  background: #f1f5f9;
+  font-weight: 700;
   color: #64748b;
+  font-size: 13px;
+  vertical-align: middle;
 }
 
 .numberCell {
@@ -106,7 +122,11 @@
 .actionsColumnHeader {
   width: 120px;
   text-align: center;
-  background: #f8fafc;
+  background: #f1f5f9;
+  font-weight: 700;
+  color: #64748b;
+  font-size: 13px;
+  vertical-align: middle;
 }
 
 .actionsCell {

@@ -171,6 +171,7 @@ export function LibraryAssetsTable({
     <div className={styles.tableContainer}>
       <table className={styles.table}>
         <thead>
+          {/* First row: Section headers (Basic Info, Visual Info, etc.) */}
           <tr className={styles.headerRowTop}>
             <th
               rowSpan={2}
@@ -197,13 +198,14 @@ export function LibraryAssetsTable({
               Actions
             </th>
           </tr>
+          {/* Second row: Property headers (name, skill, clod, etc.) */}
           <tr className={styles.headerRowBottom}>
             {groups.map((group) =>
               group.properties.map((property) => (
                 <th
                   key={property.id}
                   scope="col"
-                  className={styles.headerCell}
+                  className={`${styles.headerCell} ${styles.propertyHeaderCell}`}
                 >
                   {property.name}
                 </th>
