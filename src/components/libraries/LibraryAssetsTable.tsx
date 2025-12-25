@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Input, Select, Button, Modal } from 'antd';
+import { Input, Select, Button } from 'antd';
 import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
 import {
@@ -40,10 +40,6 @@ export function LibraryAssetsTable({
   // Edit mode state: track which row is being edited and its data
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editingRowData, setEditingRowData] = useState<Record<string, any>>({});
-
-  // Modal state for viewing asset details
-  const [selectedAsset, setSelectedAsset] = useState<AssetRow | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Router for navigation
   const router = useRouter();
@@ -126,24 +122,18 @@ export function LibraryAssetsTable({
     setEditingRowData({});
   };
 
-  // Handle view asset detail
+  // Handle view asset detail - navigate to asset detail page
   const handleViewAssetDetail = (row: AssetRow, e: React.MouseEvent) => {
+    const projectId = params.projectId as string;
+    const libraryId = params.libraryId as string;
+    
     // Check if Ctrl/Cmd key is pressed for opening in new tab
     if (e.ctrlKey || e.metaKey) {
-      const projectId = params.projectId as string;
-      const libraryId = params.libraryId as string;
       window.open(`/${projectId}/${libraryId}/${row.id}`, '_blank');
     } else {
-      // Open modal
-      setSelectedAsset(row);
-      setIsModalOpen(true);
+      // Navigate to asset detail page
+      router.push(`/${projectId}/${libraryId}/${row.id}`);
     }
-  };
-
-  // Handle close modal
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedAsset(null);
   };
 
   if (!hasProperties) {
@@ -301,7 +291,7 @@ export function LibraryAssetsTable({
                                 e.stopPropagation();
                                 handleViewAssetDetail(row, e);
                               }}
-                              title="View asset details (Ctrl+Click for new tab)"
+                              title="View asset details (Ctrl/Cmd+Click for new tab)"
                             >
                               <Image
                                 src={assetTableIcon}
@@ -429,57 +419,6 @@ export function LibraryAssetsTable({
         </tbody>
       </table>
     </div>
-
-    {/* Asset Detail Modal */}
-    <Modal
-      title={
-        <div className={styles.modalTitle}>
-          <span>Asset Details</span>
-          {selectedAsset && (
-            <span className={styles.modalAssetName}>
-              {selectedAsset.propertyValues[orderedProperties[0]?.key] || 'Untitled'}
-            </span>
-          )}
-        </div>
-      }
-      open={isModalOpen}
-      onCancel={handleCloseModal}
-      footer={[
-        <Button key="close" onClick={handleCloseModal}>
-          Close
-        </Button>,
-      ]}
-      width={700}
-      className={styles.assetDetailModal}
-    >
-      {selectedAsset && (
-        <div className={styles.modalContent}>
-          {groups.map((group) => (
-            <div key={group.section.id} className={styles.modalSection}>
-              <h3 className={styles.modalSectionTitle}>{group.section.name}</h3>
-              <div className={styles.modalFields}>
-                {group.properties.map((property) => {
-                  const value = selectedAsset.propertyValues[property.key];
-                  const display =
-                    value === null || value === undefined || value === ''
-                      ? '—'
-                      : String(value);
-
-                  return (
-                    <div key={property.id} className={styles.modalField}>
-                      <label className={styles.modalFieldLabel}>
-                        {property.name}:
-                      </label>
-                      <span className={styles.modalFieldValue}>{display}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Modal>
     </>
   );
 }
