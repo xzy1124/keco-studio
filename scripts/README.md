@@ -1,8 +1,62 @@
 # Scripts
 
-## seed-remote.sh
+## seed-via-api.ts (Recommended)
 
-Seeds the remote Supabase database with test users for E2E testing in GitHub Actions.
+Seeds the remote Supabase database with test users via **Supabase Admin API**. This is the **recommended approach** for CI environments as it:
+- ✅ Avoids direct database connection issues (IPv6, firewall, etc.)
+- ✅ Works reliably in GitHub Actions
+- ✅ Uses official Supabase APIs
+- ✅ Supports valid email domains for CI environments
+
+### Usage
+
+```bash
+npm run seed:api
+# or
+npx tsx scripts/seed-via-api.ts
+```
+
+### Requirements
+
+- `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key (with admin privileges)
+
+### What it does
+
+Creates test users with known passwords via Supabase Admin API:
+- `seed-empty@mailinator.com` / `Password123!` (empty account)
+- `seed-empty-2@mailinator.com` / `Password123!` (empty account)
+- `seed-empty-3@mailinator.com` / `Password123!` (empty account)
+- `seed-empty-4@mailinator.com` / `Password123!` (empty account)
+- `seed-project@mailinator.com` / `Password123!` (has one project)
+- `seed-library@mailinator.com` / `Password123!` (has one project with one library)
+
+> **Note**: Using `@mailinator.com` instead of `@example.com` because some CI environments reject invalid email domains.
+
+### Setting up in GitHub Actions
+
+1. Add secrets to your repository:
+   - Go to repository settings → Secrets and variables → Actions
+   - Add `NEXT_PUBLIC_SUPABASE_URL`: `https://[your-project-ref].supabase.co`
+   - Add `SUPABASE_SERVICE_ROLE_KEY`: Found in Supabase Dashboard → Project Settings → API → Service Role Key (⚠️ Keep this secret!)
+
+2. The GitHub Actions workflow will automatically run `npm run seed:api` before tests
+
+### Features
+
+- ✨ Idempotent: Won't create duplicate users
+- ✨ Creates associated data (projects, libraries) for specific test users
+- ✨ Provides detailed logging of the seeding process
+- ✨ Skips users that already exist
+- ✨ Handles errors gracefully
+
+---
+
+## seed-remote.sh (Legacy - Direct DB Connection)
+
+⚠️ **This method may fail in GitHub Actions due to IPv6/network issues.** Use `seed-via-api.ts` instead.
+
+Seeds the remote Supabase database with test users by directly connecting to PostgreSQL.
 
 ### Usage
 
@@ -12,38 +66,13 @@ Seeds the remote Supabase database with test users for E2E testing in GitHub Act
 
 ### Requirements
 
-- `SUPABASE_DB_URL` environment variable must be set
-- Format: `postgresql://postgres:[password]@[host]:[port]/postgres`
-- `psql` must be installed (PostgreSQL client)
+- `SUPABASE_DB_URL` environment variable
+- Format: `postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres`
+- `psql` must be installed
 
-### What it does
+### Limitations
 
-1. Executes `supabase/seed-remote.sql` on the remote database
-2. Creates test users with known passwords:
-   - `seed-empty@example.com` / `Password123!`
-   - `seed-empty-2@example.com` / `Password123!`
-   - `seed-empty-3@example.com` / `Password123!`
-   - `seed-empty-4@example.com` / `Password123!`
-   - `seed-project@example.com` / `Password123!` (has one project)
-   - `seed-library@example.com` / `Password123!` (has one project with one library)
-
-### Setting up in GitHub Actions
-
-1. Add `SUPABASE_DB_URL` as a GitHub Secret:
-   - Go to your repository settings → Secrets and variables → Actions
-   - Add a new secret named `SUPABASE_DB_URL`
-   - Value: `postgresql://postgres:[your-db-password]@db.[your-project-ref].supabase.co:5432/postgres`
-   - You can find the database password in your Supabase project settings → Database → Connection string
-
-2. The GitHub Actions workflow (`.github/workflows/playwright.yml`) will automatically:
-   - Install PostgreSQL client
-   - Run the seed script before tests (if `SUPABASE_DB_URL` is set)
-   - Continue even if seeding fails (so tests can still run)
-
-### Notes
-
-- The script is idempotent: it safely handles existing users and won't create duplicates
-- The `seed-remote.sql` file dynamically gets the `instance_id` from the remote database
-- This is different from `supabase/seed.sql` which uses a hardcoded local instance_id
-- The script automatically resolves hostnames to IPv4 addresses to avoid IPv6 connectivity issues in GitHub Actions
+- ❌ May fail with IPv6 connection errors in CI
+- ❌ Requires direct database access (firewall issues)
+- ❌ More complex setup and troubleshooting
 

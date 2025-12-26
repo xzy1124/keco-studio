@@ -3,6 +3,10 @@
 -- 1-4) empty accounts (for parallel testing)
 -- 5) account with one empty project
 -- 6) account with one project that has one empty library
+--
+-- Note: Using @mailinator.com for consistency with CI environment.
+-- Local Supabase allows any email domain, but we use mailinator.com
+-- to match the remote seed configuration.
 
 begin;
 
@@ -27,7 +31,7 @@ insert into auth.users (
 select
   u.id,
   '00000000-0000-0000-0000-000000000000',
-  'seed-empty@example.com',
+  'seed-empty@mailinator.com',
   u.enc_pwd,
   jsonb_build_object('provider', 'email', 'providers', array['email']),
   jsonb_build_object('username', 'seed-empty'),
@@ -54,7 +58,7 @@ insert into auth.users (
 select
   u.id,
   '00000000-0000-0000-0000-000000000000',
-  'seed-empty-2@example.com',
+  'seed-empty-2@mailinator.com',
   u.enc_pwd,
   jsonb_build_object('provider', 'email', 'providers', array['email']),
   jsonb_build_object('username', 'seed-empty-2'),
@@ -81,7 +85,7 @@ insert into auth.users (
 select
   u.id,
   '00000000-0000-0000-0000-000000000000',
-  'seed-empty-3@example.com',
+  'seed-empty-3@mailinator.com',
   u.enc_pwd,
   jsonb_build_object('provider', 'email', 'providers', array['email']),
   jsonb_build_object('username', 'seed-empty-3'),
@@ -108,7 +112,7 @@ insert into auth.users (
 select
   u.id,
   '00000000-0000-0000-0000-000000000000',
-  'seed-empty-4@example.com',
+  'seed-empty-4@mailinator.com',
   u.enc_pwd,
   jsonb_build_object('provider', 'email', 'providers', array['email']),
   jsonb_build_object('username', 'seed-empty-4'),
@@ -131,7 +135,7 @@ with user2 as (
   select
     gen_random_uuid(),
     '00000000-0000-0000-0000-000000000000',
-    'seed-project@example.com',
+    'seed-project@mailinator.com',
     crypt('Password123!', gen_salt('bf')),
     jsonb_build_object('provider', 'email', 'providers', array['email']),
     jsonb_build_object('username', 'seed-project'),
@@ -158,7 +162,7 @@ with user3 as (
   select
     gen_random_uuid(),
     '00000000-0000-0000-0000-000000000000',
-    'seed-library@example.com',
+    'seed-library@mailinator.com',
     crypt('Password123!', gen_salt('bf')),
     jsonb_build_object('provider', 'email', 'providers', array['email']),
     jsonb_build_object('username', 'seed-library'),

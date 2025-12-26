@@ -9,6 +9,7 @@ playwright/.cache/
 .eslintcache
 .env
 .env.*
+!.env.example
 .DS_Store
 Thumbs.db
 .env.local

@@ -10,11 +10,12 @@ import type { UserCredentials, RegistrationData } from '../pages/login.page';
 /**
  * Generate a unique email for registration tests
  * Uses timestamp to ensure uniqueness across test runs
+ * Note: Using mailinator.com for CI compatibility (allows test emails)
  */
 export function generateUniqueEmail(): string {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8);
-  return `test-user-${timestamp}-${random}@example.com`;
+  return `test-user-${timestamp}-${random}@mailinator.com`;
 }
 
 /**
@@ -26,7 +27,7 @@ export function generateRegistrationData(): RegistrationData {
   const password = 'TestPassword123!';
 
   return {
-    email: `test-user-${timestamp}-${random}@example.com`,
+    email: `test-user-${timestamp}-${random}@mailinator.com`,
     username: `testuser_${random}`,
     password,
     confirmPassword: password,
@@ -51,7 +52,7 @@ export const users = {
    * Used for testing initial state and creation flows
    */
   seedEmpty: {
-    email: 'seed-empty@example.com',
+    email: 'seed-empty@mailinator.com',
     password: 'Password123!',
   } as UserCredentials,
 
@@ -60,7 +61,7 @@ export const users = {
    * Used for parallel testing or when first empty account is in use
    */
   seedEmpty2: {
-    email: 'seed-empty-2@example.com',
+    email: 'seed-empty-2@mailinator.com',
     password: 'Password123!',
   } as UserCredentials,
 
@@ -69,7 +70,7 @@ export const users = {
    * Used for parallel testing or when other empty accounts are in use
    */
   seedEmpty3: {
-    email: 'seed-empty-3@example.com',
+    email: 'seed-empty-3@mailinator.com',
     password: 'Password123!',
   } as UserCredentials,
 
@@ -78,7 +79,7 @@ export const users = {
    * Used for parallel testing or when other empty accounts are in use
    */
   seedEmpty4: {
-    email: 'seed-empty-4@example.com',
+    email: 'seed-empty-4@mailinator.com',
     password: 'Password123!',
   } as UserCredentials,
 
@@ -87,7 +88,7 @@ export const users = {
    * Used for testing project-related flows
    */
   seedWithProject: {
-    email: 'seed-project@example.com',
+    email: 'seed-project@mailinator.com',
     password: 'Password123!',
   } as UserCredentials,
 
@@ -96,7 +97,7 @@ export const users = {
    * Used for testing library-related flows
    */
   seedWithLibrary: {
-    email: 'seed-library@example.com',
+    email: 'seed-library@mailinator.com',
     password: 'Password123!',
   } as UserCredentials,
 
@@ -104,7 +105,7 @@ export const users = {
    * Invalid credentials for negative testing
    */
   invalid: {
-    email: 'nonexistent@example.com',
+    email: 'nonexistent@mailinator.com',
     password: 'WrongPassword!',
   } as UserCredentials,
 
@@ -112,7 +113,7 @@ export const users = {
    * User with invalid password for error testing
    */
   wrongPassword: {
-    email: 'seed-empty@example.com',
+    email: 'seed-empty@mailinator.com',
     password: 'IncorrectPassword!',
   } as UserCredentials,
 };
