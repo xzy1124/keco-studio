@@ -20,7 +20,7 @@ begin
   end if;
 
   -- User 1: empty account
-  if not exists (select 1 from auth.users where email = 'seed-empty@example.com') then
+  if not exists (select 1 from auth.users where email = 'seed-empty@mailinator.com') then
     with u as (
       select
         gen_random_uuid() as id,
@@ -37,7 +37,7 @@ begin
     select
       u.id,
       v_instance_id,
-      'seed-empty@example.com',
+      'seed-empty@mailinator.com',
       u.enc_pwd,
       jsonb_build_object('provider', 'email', 'providers', array['email']),
       jsonb_build_object('username', 'seed-empty'),
@@ -49,7 +49,7 @@ begin
   end if;
 
   -- User 2: empty account (for parallel testing)
-  if not exists (select 1 from auth.users where email = 'seed-empty-2@example.com') then
+  if not exists (select 1 from auth.users where email = 'seed-empty-2@mailinator.com') then
     with u as (
       select
         gen_random_uuid() as id,
@@ -66,7 +66,7 @@ begin
     select
       u.id,
       v_instance_id,
-      'seed-empty-2@example.com',
+      'seed-empty-2@mailinator.com',
       u.enc_pwd,
       jsonb_build_object('provider', 'email', 'providers', array['email']),
       jsonb_build_object('username', 'seed-empty-2'),
@@ -78,7 +78,7 @@ begin
   end if;
 
   -- User 3: empty account (for parallel testing)
-  if not exists (select 1 from auth.users where email = 'seed-empty-3@example.com') then
+  if not exists (select 1 from auth.users where email = 'seed-empty-3@mailinator.com') then
     with u as (
       select
         gen_random_uuid() as id,
@@ -95,7 +95,7 @@ begin
     select
       u.id,
       v_instance_id,
-      'seed-empty-3@example.com',
+      'seed-empty-3@mailinator.com',
       u.enc_pwd,
       jsonb_build_object('provider', 'email', 'providers', array['email']),
       jsonb_build_object('username', 'seed-empty-3'),
@@ -107,7 +107,7 @@ begin
   end if;
 
   -- User 4: empty account (for parallel testing)
-  if not exists (select 1 from auth.users where email = 'seed-empty-4@example.com') then
+  if not exists (select 1 from auth.users where email = 'seed-empty-4@mailinator.com') then
     with u as (
       select
         gen_random_uuid() as id,
@@ -124,7 +124,7 @@ begin
     select
       u.id,
       v_instance_id,
-      'seed-empty-4@example.com',
+      'seed-empty-4@mailinator.com',
       u.enc_pwd,
       jsonb_build_object('provider', 'email', 'providers', array['email']),
       jsonb_build_object('username', 'seed-empty-4'),
@@ -140,7 +140,7 @@ begin
     v_user5_id uuid;
   begin
     -- Get or create user
-    select id into v_user5_id from auth.users where email = 'seed-project@example.com';
+    select id into v_user5_id from auth.users where email = 'seed-project@mailinator.com';
     
     if v_user5_id is null then
       insert into auth.users (
@@ -154,7 +154,7 @@ begin
       values (
         gen_random_uuid(),
         v_instance_id,
-        'seed-project@example.com',
+        'seed-project@mailinator.com',
         crypt('Password123!', gen_salt('bf')),
         jsonb_build_object('provider', 'email', 'providers', array['email']),
         jsonb_build_object('username', 'seed-project'),
@@ -183,7 +183,7 @@ begin
     v_project6_id uuid;
   begin
     -- Get or create user
-    select id into v_user6_id from auth.users where email = 'seed-library@example.com';
+    select id into v_user6_id from auth.users where email = 'seed-library@mailinator.com';
     
     if v_user6_id is null then
       insert into auth.users (
@@ -197,7 +197,7 @@ begin
       values (
         gen_random_uuid(),
         v_instance_id,
-        'seed-library@example.com',
+        'seed-library@mailinator.com',
         crypt('Password123!', gen_salt('bf')),
         jsonb_build_object('provider', 'email', 'providers', array['email']),
         jsonb_build_object('username', 'seed-library'),
