@@ -53,6 +53,8 @@ export function AssetReferenceModal({
   } | null>(null);
   const [loadingAssetDetails, setLoadingAssetDetails] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const assetCardRef = useRef<HTMLDivElement>(null);
 
   // Load libraries
   useEffect(() => {
@@ -183,6 +185,12 @@ export function AssetReferenceModal({
       return;
     }
 
+    // Clear any pending hide timeout
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+
     const loadAssetDetails = async () => {
       setLoadingAssetDetails(true);
       try {
@@ -210,6 +218,52 @@ export function AssetReferenceModal({
 
     loadAssetDetails();
   }, [hoveredAssetId, supabase]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle mouse enter on asset card
+  const handleAssetMouseEnter = (assetId: string) => {
+    // Clear any pending hide timeout
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    setHoveredAssetId(assetId);
+  };
+
+  // Handle mouse leave on asset card with delay
+  const handleAssetMouseLeave = () => {
+    // Set a delay before hiding
+    hideTimeoutRef.current = setTimeout(() => {
+      setHoveredAssetId(null);
+      hideTimeoutRef.current = null;
+    }, 200); // 200ms delay
+  };
+
+  // Handle mouse enter on asset card panel
+  const handleAssetCardMouseEnter = () => {
+    // Clear any pending hide timeout
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  };
+
+  // Handle mouse leave on asset card panel with delay
+  const handleAssetCardMouseLeave = () => {
+    // Set a delay before hiding
+    hideTimeoutRef.current = setTimeout(() => {
+      setHoveredAssetId(null);
+      hideTimeoutRef.current = null;
+    }, 200); // 200ms delay
+  };
 
   if (!open) return null;
 
@@ -265,8 +319,8 @@ export function AssetReferenceModal({
                     tempSelectedAssetId === asset.id ? styles.assetCardSelected : ''
                   }`}
                   onClick={() => handleAssetSelect(asset)}
-                  onMouseEnter={() => setHoveredAssetId(asset.id)}
-                  onMouseLeave={() => setHoveredAssetId(null)}
+                  onMouseEnter={() => handleAssetMouseEnter(asset.id)}
+                  onMouseLeave={handleAssetMouseLeave}
                   title={asset.name}
                 >
                   <Avatar
@@ -292,20 +346,21 @@ export function AssetReferenceModal({
         </div>
       </div>
 
-      {/* Buffer area to prevent flickering */}
-      {hoveredAssetDetails && <div className={styles.bufferArea} />}
-
       {/* Asset Card Panel */}
       {hoveredAssetDetails && (
-        <div
-          className={styles.assetCardPanel}
-          onMouseEnter={() => {
-            // Keep panel visible when hovering over it
-          }}
-          onMouseLeave={() => {
-            setHoveredAssetId(null);
-          }}
-        >
+        <>
+          {/* Invisible bridge to prevent mouse from leaving */}
+          <div
+            className={styles.assetCardBridge}
+            onMouseEnter={handleAssetCardMouseEnter}
+            onMouseLeave={handleAssetCardMouseLeave}
+          />
+          <div
+            ref={assetCardRef}
+            className={styles.assetCardPanel}
+            onMouseEnter={handleAssetCardMouseEnter}
+            onMouseLeave={handleAssetCardMouseLeave}
+          >
           <div className={styles.assetCardHeader}>
             <div className={styles.assetCardTitle}>ASSET CARD</div>
             <button
@@ -372,6 +427,7 @@ export function AssetReferenceModal({
             ) : null}
           </div>
         </div>
+        </>
       )}
       </div>
     </div>,
