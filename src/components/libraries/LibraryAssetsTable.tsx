@@ -21,7 +21,6 @@ export type LibraryAssetsTableProps = {
   rows: AssetRow[];
   onSaveAsset?: (assetName: string, propertyValues: Record<string, any>) => Promise<void>;
   onUpdateAsset?: (assetId: string, assetName: string, propertyValues: Record<string, any>) => Promise<void>;
-  onDeleteAsset?: (assetId: string) => Promise<void>;
 };
 
 export function LibraryAssetsTable({
@@ -31,7 +30,6 @@ export function LibraryAssetsTable({
   rows,
   onSaveAsset,
   onUpdateAsset,
-  onDeleteAsset,
 }: LibraryAssetsTableProps) {
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [newRowData, setNewRowData] = useState<Record<string, any>>({});
@@ -344,17 +342,8 @@ export function LibraryAssetsTable({
                       </Button>
                     </div>
                   ) : (
-                    // View mode: show delete button only
-                    <div className={styles.viewActions}>
-                      <button
-                        className={`${styles.actionButton} ${styles.deleteButton}`}
-                        onClick={() => onDeleteAsset && onDeleteAsset(row.id)}
-                        title="Delete asset"
-                        disabled={editingRowId !== null || isAddingRow}
-                      >
-                        ×
-                      </button>
-                    </div>
+                    // View mode: no actions
+                    null
                   )}
                 </td>
               </tr>

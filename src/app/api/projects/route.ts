@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 
 export async function GET() {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -23,7 +25,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -61,7 +66,7 @@ export async function POST(request: Request) {
   // 1. If function returns JSON type, Supabase RPC returns the JSON object directly (not array)
   // 2. If function returns TABLE type, Supabase RPC returns an array
   let result: any;
-  
+
   if (Array.isArray(data)) {
     // TABLE return type - get first element
     if (data.length === 0) {
@@ -108,4 +113,3 @@ export async function POST(request: Request) {
     { status: 201 }
   );
 }
-

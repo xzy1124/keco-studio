@@ -18,7 +18,6 @@ import {
   getLibrarySummary,
   createAsset,
   updateAsset,
-  deleteAsset,
 } from '@/lib/services/libraryAssetsService';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import styles from './page.module.css';
@@ -208,17 +207,6 @@ export default function LibraryPage() {
     setAssetRows(rows);
   };
 
-  // Callback for deleting asset from table
-  const handleDeleteAssetFromTable = async (assetId: string) => {
-    if (!confirm('Are you sure you want to delete this asset?')) {
-      return;
-    }
-    await deleteAsset(supabase, assetId);
-    // Refresh asset rows
-    const rows = await getLibraryAssetsWithProperties(supabase, libraryId);
-    setAssetRows(rows);
-  };
-
   if (loading) {
     return (
       <div className={styles.loadingContainer}>
@@ -274,7 +262,6 @@ export default function LibraryPage() {
         rows={assetRows}
         onSaveAsset={handleSaveAssetFromTable}
         onUpdateAsset={handleUpdateAssetFromTable}
-        onDeleteAsset={handleDeleteAssetFromTable}
       />
 
       {saveError && (

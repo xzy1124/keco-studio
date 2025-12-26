@@ -307,18 +307,3 @@ export async function updateAsset(
   }
 }
 
-// T012: Delete an asset (values will be cascade deleted)
-export async function deleteAsset(
-  supabase: SupabaseClient,
-  assetId: string
-): Promise<void> {
-  const { error } = await supabase
-    .from('library_assets')
-    .delete()
-    .eq('id', assetId);
-
-  if (error) {
-    throw error;
-  }
-}
-
