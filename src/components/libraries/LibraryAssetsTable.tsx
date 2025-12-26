@@ -8,7 +8,9 @@ import {
   SectionConfig,
 } from '@/lib/types/libraryAssets';
 import { AssetReferenceModal } from '@/components/asset/AssetReferenceModal';
+import { MediaFileUpload } from '@/components/media/MediaFileUpload';
 import { useSupabase } from '@/lib/SupabaseContext';
+import { type MediaFileMetadata } from '@/lib/services/mediaFileUploadService';
 import assetTableIcon from '@/app/assets/images/AssetTableIcon.svg';
 import libraryAssetTableIcon from '@/app/assets/images/LibraryAssetTableIcon.svg';
 import libraryAssetTable2Icon from '@/app/assets/images/LibraryAssetTable2.svg';
@@ -274,6 +276,11 @@ export function LibraryAssetsTable({
     setNewRowData((prev) => ({ ...prev, [propertyId]: value }));
   };
 
+  // Handle media file change for new row
+  const handleMediaFileChange = (propertyId: string, value: MediaFileMetadata | null) => {
+    setNewRowData((prev) => ({ ...prev, [propertyId]: value }));
+  };
+
   // Handle input change for editing row
   const handleEditInputChange = (propertyId: string, value: any) => {
     setEditingRowData((prev) => ({ ...prev, [propertyId]: value }));
@@ -528,6 +535,20 @@ export function LibraryAssetsTable({
                           assetNamesCache={assetNamesCache}
                         />
                       </div>
+                    </td>
+                  );
+                }
+                
+                // Check if this is a media type field
+                if (property.dataType === 'media') {
+                  const mediaValue = newRowData[property.key] as MediaFileMetadata | null | undefined;
+                  return (
+                    <td key={property.id} className={styles.editCell}>
+                      <MediaFileUpload
+                        value={mediaValue || null}
+                        onChange={(value) => handleMediaFileChange(property.key, value)}
+                        disabled={isSaving}
+                      />
                     </td>
                   );
                 }
