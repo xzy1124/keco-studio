@@ -415,6 +415,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         title: (
           <button
             className={styles.createButton}
+            data-testid="sidebar-create-library-button"
             onClick={(e) => {
               e.stopPropagation();
               if (!currentIds.projectId) {

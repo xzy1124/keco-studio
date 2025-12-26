@@ -56,6 +56,33 @@ export const users = {
   } as UserCredentials,
 
   /**
+   * Seeded empty user 2 - no projects, libraries, or assets
+   * Used for parallel testing or when first empty account is in use
+   */
+  seedEmpty2: {
+    email: 'seed-empty-2@example.com',
+    password: 'Password123!',
+  } as UserCredentials,
+
+  /**
+   * Seeded empty user 3 - no projects, libraries, or assets
+   * Used for parallel testing or when other empty accounts are in use
+   */
+  seedEmpty3: {
+    email: 'seed-empty-3@example.com',
+    password: 'Password123!',
+  } as UserCredentials,
+
+  /**
+   * Seeded empty user 4 - no projects, libraries, or assets
+   * Used for parallel testing or when other empty accounts are in use
+   */
+  seedEmpty4: {
+    email: 'seed-empty-4@example.com',
+    password: 'Password123!',
+  } as UserCredentials,
+
+  /**
    * Seeded user with existing project data
    * Used for testing project-related flows
    */

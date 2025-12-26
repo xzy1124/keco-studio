@@ -22,6 +22,11 @@ export class LibraryPage {
   readonly librariesHeading: Locator;
   readonly createFolderButton: Locator;
   readonly createLibraryButton: Locator;
+  
+  // Sidebar add button (for creating library/folder directly under project)
+  readonly sidebarAddButton: Locator;
+  readonly addLibraryMenuButton: Locator;
+  readonly addFolderMenuButton: Locator;
 
   // Folder creation form
   readonly folderNameInput: Locator;
@@ -48,14 +53,35 @@ export class LibraryPage {
 
     // Action buttons
     this.createFolderButton = page.getByRole('button', { name: /create folder/i });
-    // Note: There are two "Create Library" buttons:
-    // 1. LibraryToolbar button (with aria-label="Create Library") - commented out for now
-    // 2. FolderPage button (in empty state) - using .nth(1) to select the second one
-    // this.createLibraryButton = page.getByRole('button', { name: /create library/i }); // First button
-    this.createLibraryButton = page.getByRole('button', { name: /create library/i }).nth(1); // Second button (FolderPage)
+    
+    // Sidebar "Create new library" button (in folder treeitem)
+    // This button appears in the sidebar tree under each folder
+    // Uses data-testid for stable selection
+    this.createLibraryButton = page.locator('button[data-testid="sidebar-create-library-button"]')
+      .or(page.getByRole('treeitem').locator('button[class*="createButton"]').filter({ hasText: /^Create new library$/ }).first());
+    
+    // Sidebar add button (for creating library/folder directly under project)
+    this.sidebarAddButton = page.locator('button[title="Add new folder or library"]')
+      .or(page.getByRole('button', { name: /add/i }).filter({ has: page.locator('img[alt="Add library"]') }));
+    
+    // AddLibraryMenu button (appears after clicking sidebar add button)
+    // Note: There are two "Create new library" buttons:
+    // 1. Sidebar treeitem button (Sidebar_createButton__oNFd8) - not what we want
+    // 2. AddLibraryMenu menu item button (AddLibraryMenu_menuItem__4kY8s) - this is what we want
+    // Use class selector to specifically target AddLibraryMenu button (the second one in the error)
+    // Select the button with AddLibraryMenu_menuItem class that contains "Create new library" text
+    this.addLibraryMenuButton = page.locator('button[class*="AddLibraryMenu_menuItem"]')
+      .filter({ hasText: /^Create new library$/ })
+      .first();
+    
+    // AddLibraryMenu "Create new folder" button
+    this.addFolderMenuButton = page.locator('button[class*="AddLibraryMenu_menuItem"]')
+      .filter({ hasText: /^Create new folder$/ })
+      .first();
 
     // Folder form inputs
-    this.folderNameInput = page.getByLabel(/folder name/i);
+    // Note: NewFolderModal uses a plain input with placeholder, not a labeled input
+    this.folderNameInput = page.getByPlaceholder(/enter folder name/i);
     // Note: Folder modal doesn't have description field based on NewFolderModal.tsx
     this.folderDescriptionInput = page.getByLabel(/folder description/i)
       .or(page.getByLabel(/description/i));
@@ -151,6 +177,68 @@ export class LibraryPage {
   }
 
   /**
+   * Create a library directly under project (not in a folder)
+   * This uses the sidebar add button -> AddLibraryMenu -> Create new library flow
+   * @param library - Library data with name and optional description
+   */
+  async createLibraryUnderProject(library: LibraryData): Promise<void> {
+    // Step 1: Click the sidebar add button (title="Add new folder or library")
+    await expect(this.sidebarAddButton).toBeVisible({ timeout: 5000 });
+    await this.sidebarAddButton.click();
+
+    // Step 2: Wait for AddLibraryMenu to appear and click "Create new library"
+    await expect(this.addLibraryMenuButton).toBeVisible({ timeout: 3000 });
+    await this.addLibraryMenuButton.click();
+
+    // Step 3: Wait for library creation modal to appear
+    await expect(this.libraryNameInput).toBeVisible({ timeout: 5000 });
+
+    // Step 4: Fill in library details
+    await this.libraryNameInput.fill(library.name);
+    
+    if (library.description) {
+      // Wait for description field to be visible
+      await expect(this.libraryDescriptionInput).toBeVisible({ timeout: 3000 });
+      await this.libraryDescriptionInput.fill(library.description);
+    }
+
+    // Step 5: Submit the form
+    await this.submitButton.click();
+
+    // Step 6: Wait for modal to close
+    await expect(this.libraryNameInput).not.toBeVisible({ timeout: 10000 });
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Create a folder directly under project (not in another folder)
+   * This uses the sidebar add button -> AddLibraryMenu -> Create new folder flow
+   * @param folder - Folder data with name
+   */
+  async createFolderUnderProject(folder: FolderData): Promise<void> {
+    // Step 1: Click the sidebar add button (title="Add new folder or library")
+    await expect(this.sidebarAddButton).toBeVisible({ timeout: 5000 });
+    await this.sidebarAddButton.click();
+
+    // Step 2: Wait for AddLibraryMenu to appear and click "Create new folder"
+    await expect(this.addFolderMenuButton).toBeVisible({ timeout: 3000 });
+    await this.addFolderMenuButton.click();
+
+    // Step 3: Wait for folder creation modal to appear
+    await expect(this.folderNameInput).toBeVisible({ timeout: 5000 });
+
+    // Step 4: Fill in folder name
+    await this.folderNameInput.fill(folder.name);
+
+    // Step 5: Submit the form
+    await this.submitButton.click();
+
+    // Step 6: Wait for modal to close
+    await expect(this.folderNameInput).not.toBeVisible({ timeout: 10000 });
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
    * Open an existing library by name
    * @param libraryName - Name of the library to open
    */
@@ -168,6 +256,33 @@ export class LibraryPage {
   }
 
   /**
+   * Click the predefine button for a library in the sidebar
+   * @param libraryName - Name of the library
+   */
+  async clickPredefineButton(libraryName: string): Promise<void> {
+    // Find the library item in the sidebar tree
+    const sidebar = this.page.getByRole('tree');
+    const libraryItem = sidebar.getByText(libraryName, { exact: true });
+    
+    // The predefine button is in the same row as the library name
+    // Find the button with aria-label="Library sections" that is near the library name
+    // Strategy: Find the library row container, then find the predefine button within it
+    const libraryRow = libraryItem.locator('..').locator('..'); // Navigate up to the library row container
+    
+    // Find the predefine button by aria-label
+    const predefineButton = libraryRow
+      .locator('button[aria-label="Library sections"]')
+      .or(libraryRow.getByRole('button', { name: /library sections/i }));
+    
+    await expect(predefineButton).toBeVisible({ timeout: 5000 });
+    await predefineButton.click();
+    
+    // Wait for navigation to predefine page
+    await this.page.waitForURL(/\/predefine$/, { timeout: 10000 });
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
    * Navigate back to project from library view
    */
   async navigateBackToProject(): Promise<void> {
@@ -181,7 +296,7 @@ export class LibraryPage {
     } else {
       // Extract projectId from current URL and navigate to project root
       const currentUrl = this.page.url();
-      const match = currentUrl.match(/\/([^/]+)(?:\/|$)/);
+      const match = currentUrl.match(/https?:\/\/[^/]+\/([^/]+)/);
       if (match && match[1]) {
         await this.page.goto(`/${match[1]}`);
       }
@@ -239,13 +354,13 @@ export class LibraryPage {
     // Wait for page to stabilize first
     await this.page.waitForLoadState('domcontentloaded', { timeout: 10000 });
     
-    // Wait for either create library button (toolbar) or empty state text or sidebar folder
+    // Wait for either sidebar folder or empty state text
     // Note: Use sidebar.getByText to avoid strict mode violation (Resources Folder appears in both sidebar and folder card)
+    // Don't use createLibraryButton here as it may not exist if folder is not expanded
     const sidebar = this.page.getByRole('tree');
     await expect(
-      this.createLibraryButton
+      sidebar.getByText(/resources folder/i)
         .or(this.page.getByText(/no folders or libraries/i))
-        .or(sidebar.getByText(/resources folder/i))
     ).toBeVisible({ timeout: 15000 });
     
     await this.page.waitForLoadState('networkidle', { timeout: 10000 });

@@ -7,7 +7,7 @@ import { LoginPage } from '../pages/login.page';
 
 import { projects } from '../fixures/projects';
 import { libraries } from '../fixures/libraries';
-import { DEFAULT_RESOURCE_FOLDER } from '../fixures/folders';
+import { DEFAULT_RESOURCE_FOLDER, folders } from '../fixures/folders';
 import { predefinedTemplates } from '../fixures/predefined';
 import { assets } from '../fixures/assets';
 import { users } from '../fixures/users';
@@ -22,13 +22,14 @@ import { users } from '../fixures/users';
  * 4. Create Breed Library (reference library)
  * 5. Create Breed Template and Asset (to be referenced)
  * 6. Create Livestock Library (main library)
- * 7. Create Direct Library (under project, not folder)
- * 8. Create Livestock Predefined Template with:
+ * 7. Create Direct Folder (under project, not in another folder)
+ * 8. Create Direct Library (under project, not folder)
+ * 9. Create Livestock Predefined Template with:
  *    - String field: "Maturity Date"
  *    - Option field: "Health Status" with options [Healthy, Sick, Needs Checkup]
  *    - Reference field: "Breed" referencing the Breed Library
- * 9. Create a Livestock Asset based on the template
- * 10. Verify asset creation and field values
+ * 10. Create a Livestock Asset based on the template
+ * 11. Verify asset creation and field values
  * 
  * Authentication:
  * - User logs in at the start of each test
@@ -57,11 +58,11 @@ test.describe('Happy Path - Complete User Journey', () => {
     // Authenticate user before navigating to projects
     const loginPage = new LoginPage(page);
     await loginPage.goto();
-    await loginPage.login(users.seedEmpty);
+    await loginPage.login(users.seedEmpty4);
     await loginPage.expectLoginSuccess();
 
     // Now navigate to projects page
-    await projectPage.goto();
+    // await projectPage.goto();
   });
 
   test('should complete full workflow: Project → Folder → Libraries → Template → Asset', async () => {
@@ -81,11 +82,11 @@ test.describe('Happy Path - Complete User Journey', () => {
     // ==========================================
     // STEP 3: Navigate to default Resource Folder
     // ==========================================
-    await test.step('Open the default Resource Folder', async () => {
-      // When a project is created, a "Resource Folder" is auto-created
-      await libraryPage.expectFolderExists(DEFAULT_RESOURCE_FOLDER);
-      await libraryPage.openFolder(DEFAULT_RESOURCE_FOLDER);
-    });
+    // await test.step('Open the default Resource Folder', async () => {
+    //   // When a project is created, a "Resource Folder" is auto-created
+    //   await libraryPage.expectFolderExists(DEFAULT_RESOURCE_FOLDER);
+    //   await libraryPage.openFolder(DEFAULT_RESOURCE_FOLDER);
+    // });
 
     // ==========================================
     // STEP 4: Create the Reference Library (Breed Library)
@@ -105,9 +106,8 @@ test.describe('Happy Path - Complete User Journey', () => {
       await libraryPage.openLibrary(libraries.breed.name);
       await libraryPage.waitForPageLoad();
       
-      // Navigate to predefine page to create schema
-      const currentUrl = new URL(libraryPage.page.url());
-      await libraryPage.page.goto(currentUrl.pathname + '/predefine');
+      // Click the predefine button in the sidebar to navigate to predefine page
+      await libraryPage.clickPredefineButton(libraries.breed.name);
       await predefinedPage.waitForPageLoad();
       
       // Create breed schema
@@ -121,10 +121,6 @@ test.describe('Happy Path - Complete User Journey', () => {
       // Create breed asset
       await assetPage.createAsset(predefinedTemplates.breed.name, assets.breed);
       await assetPage.expectAssetCreated();
-      
-      // Navigate back to folder
-      await libraryPage.navigateBackToProject();
-      await libraryPage.navigateBackToProject();
     });
 
     // ==========================================
@@ -137,24 +133,42 @@ test.describe('Happy Path - Complete User Journey', () => {
     // });
 
     // ==========================================
-    // STEP 7: Create a Library directly under Project
+    // STEP 7: Create a Folder directly under Project
     // ==========================================
-    // Tests the P → L path (not P → F → L)
-    // await test.step('Create a library directly under project', async () => {
-    //   // Navigate back to project root
-    //   await libraryPage.navigateBackToProject();
-    //   await libraryPage.navigateBackToProject(); // Back to project root
+    // Tests the P → F path (not P → F → F)
+    await test.step('Create a folder directly under project', async () => {
+      // Navigate back to project root
+      await libraryPage.navigateBackToProject();
       
-    //   // Create library directly under project
-    //   await libraryPage.createLibrary(libraries.directLibrary);
-    //   await libraryPage.expectLibraryCreated();
+      // Create folder directly under project using sidebar add button
+      // This uses: sidebar add button -> AddLibraryMenu -> Create new folder
+      await libraryPage.createFolderUnderProject(folders.directFolder);
+      await libraryPage.expectFolderCreated();
       
-    //   // Navigate back to continue with main flow
-    //   await libraryPage.navigateBackToProject();
-    // });
+      // Navigate back to continue with main flow
+      await libraryPage.navigateBackToProject();
+    });
 
     // ==========================================
-    // STEP 8: Open the Livestock Library
+    // STEP 8: Create a Library directly under Project
+    // ==========================================
+    // Tests the P → L path (not P → F → L)
+    await test.step('Create a library directly under project', async () => {
+      // Navigate back to project root
+      await libraryPage.navigateBackToProject();
+      
+      // Create library directly under project using sidebar add button
+      // This uses: sidebar add button -> AddLibraryMenu -> Create new library
+      await libraryPage.createLibraryUnderProject(libraries.directLibrary);
+      await libraryPage.expectLibraryCreated();
+      
+      // Navigate back to continue with main flow
+      await libraryPage.navigateBackToProject();
+    });
+
+    
+    // ==========================================
+    // STEP 9: Open the Livestock Library
     // ==========================================
     // await test.step('Open the livestock library to create schema', async () => {
     //   await libraryPage.openFolder(DEFAULT_RESOURCE_FOLDER);
@@ -163,7 +177,7 @@ test.describe('Happy Path - Complete User Journey', () => {
     // });
 
     // ==========================================
-    // STEP 9: Create Livestock Predefined Schema
+    // STEP 10: Create Livestock Predefined Schema
     // ==========================================
     // Schema includes:
     // - Default "Name" field (auto-created, non-configurable)
@@ -185,7 +199,7 @@ test.describe('Happy Path - Complete User Journey', () => {
     // });
 
     // ==========================================
-    // STEP 10: Create a Livestock Asset
+    // STEP 11: Create a Livestock Asset
     // ==========================================
     // await test.step('Create an asset using the predefined schema', async () => {
     //   // Assets are created on the library page
@@ -198,7 +212,7 @@ test.describe('Happy Path - Complete User Journey', () => {
     // });
 
     // ==========================================
-    // STEP 11: Verify Asset Details
+    // STEP 12: Verify Asset Details
     // ==========================================
     // await test.step('Verify asset details and field values', async () => {
     //   // Verify asset name

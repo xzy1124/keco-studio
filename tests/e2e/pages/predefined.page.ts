@@ -130,11 +130,7 @@ export class PredefinedPage {
     
     // Wait for section name input to appear
     await expect(this.sectionNameInput).toBeVisible({ timeout: 5000 });
-    await this.sectionNameInput.fill(sectionName);
-    
-    // Save section using TopBar Save button
-    await this.saveButton.click();
-    await this.page.waitForLoadState('networkidle', { timeout: 10000 });
+    await this.sectionNameInput.fill(sectionName);   
   }
 
   /**

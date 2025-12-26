@@ -40,5 +40,14 @@ export const folders = {
     name: 'Equipment Folder',
     description: 'Folder for organizing equipment-related libraries',
   } as FolderData,
+
+  /**
+   * Folder created directly under project (not in another folder)
+   * Used in happy path to test P → F path (not P → F → F)
+   */
+  directFolder: {
+    name: 'Direct Folder',
+    description: 'Folder created directly under project',
+  } as FolderData,
 };
 

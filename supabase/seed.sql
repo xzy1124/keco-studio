@@ -1,8 +1,8 @@
 -- Seed data for local testing
--- Three users:
--- 1) empty account
--- 2) account with one empty project
--- 3) account with one project that has one empty library
+-- Multiple users:
+-- 1-4) empty accounts (for parallel testing)
+-- 5) account with one empty project
+-- 6) account with one project that has one empty library
 
 begin;
 
@@ -31,6 +31,87 @@ select
   u.enc_pwd,
   jsonb_build_object('provider', 'email', 'providers', array['email']),
   jsonb_build_object('username', 'seed-empty'),
+  now(), now(),
+  'authenticated', 'authenticated',
+  now(), now(), now(),
+  '', '', '', '', '', ''
+from u;
+
+-- User 2: empty account (for parallel testing)
+with u as (
+  select
+    gen_random_uuid() as id,
+    crypt('Password123!', gen_salt('bf')) as enc_pwd
+)
+insert into auth.users (
+  id, instance_id, email, encrypted_password,
+  raw_app_meta_data, raw_user_meta_data,
+  created_at, updated_at, aud, role,
+  email_confirmed_at, confirmation_sent_at, last_sign_in_at,
+  confirmation_token, recovery_token, email_change_token_new,
+  email_change_token_current, email_change, reauthentication_token
+)
+select
+  u.id,
+  '00000000-0000-0000-0000-000000000000',
+  'seed-empty-2@example.com',
+  u.enc_pwd,
+  jsonb_build_object('provider', 'email', 'providers', array['email']),
+  jsonb_build_object('username', 'seed-empty-2'),
+  now(), now(),
+  'authenticated', 'authenticated',
+  now(), now(), now(),
+  '', '', '', '', '', ''
+from u;
+
+-- User 3: empty account (for parallel testing)
+with u as (
+  select
+    gen_random_uuid() as id,
+    crypt('Password123!', gen_salt('bf')) as enc_pwd
+)
+insert into auth.users (
+  id, instance_id, email, encrypted_password,
+  raw_app_meta_data, raw_user_meta_data,
+  created_at, updated_at, aud, role,
+  email_confirmed_at, confirmation_sent_at, last_sign_in_at,
+  confirmation_token, recovery_token, email_change_token_new,
+  email_change_token_current, email_change, reauthentication_token
+)
+select
+  u.id,
+  '00000000-0000-0000-0000-000000000000',
+  'seed-empty-3@example.com',
+  u.enc_pwd,
+  jsonb_build_object('provider', 'email', 'providers', array['email']),
+  jsonb_build_object('username', 'seed-empty-3'),
+  now(), now(),
+  'authenticated', 'authenticated',
+  now(), now(), now(),
+  '', '', '', '', '', ''
+from u;
+
+-- User 4: empty account (for parallel testing)
+with u as (
+  select
+    gen_random_uuid() as id,
+    crypt('Password123!', gen_salt('bf')) as enc_pwd
+)
+insert into auth.users (
+  id, instance_id, email, encrypted_password,
+  raw_app_meta_data, raw_user_meta_data,
+  created_at, updated_at, aud, role,
+  email_confirmed_at, confirmation_sent_at, last_sign_in_at,
+  confirmation_token, recovery_token, email_change_token_new,
+  email_change_token_current, email_change, reauthentication_token
+)
+select
+  u.id,
+  '00000000-0000-0000-0000-000000000000',
+  'seed-empty-4@example.com',
+  u.enc_pwd,
+  jsonb_build_object('provider', 'email', 'providers', array['email']),
+  jsonb_build_object('username', 'seed-empty-4'),
   now(), now(),
   'authenticated', 'authenticated',
   now(), now(), now(),
