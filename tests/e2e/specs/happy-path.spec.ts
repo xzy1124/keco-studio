@@ -58,7 +58,7 @@ test.describe('Happy Path - Complete User Journey', () => {
     // Authenticate user before navigating to projects
     const loginPage = new LoginPage(page);
     await loginPage.goto();
-    await loginPage.login(users.seedEmpty4);
+    await loginPage.login(users.seedEmpty3);
     await loginPage.expectLoginSuccess();
 
     // Now navigate to projects page
@@ -115,7 +115,10 @@ test.describe('Happy Path - Complete User Journey', () => {
       await predefinedPage.expectTemplateCreated();
       
       // Navigate back to library page to create asset
-      await libraryPage.page.goBack();
+      // Instead of goBack(), click on the library name in the sidebar to navigate
+      const sidebar = libraryPage.page.getByRole('tree');
+      const libraryLink = sidebar.getByText(libraries.breed.name, { exact: true });
+      await libraryLink.click();
       await libraryPage.waitForPageLoad();
       
       // Create breed asset
