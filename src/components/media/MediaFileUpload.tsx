@@ -131,7 +131,29 @@ export function MediaFileUpload({ value, onChange, disabled }: MediaFileUploadPr
       {value && (
         <div className={styles.fileInfo}>
           <div className={styles.fileDetails}>
-            <span className={styles.fileIcon}>{getFileIcon(value.fileType)}</span>
+            {isImageFile(value.fileType) ? (
+              <div className={styles.imageThumbnail}>
+                <img
+                  src={value.url}
+                  alt={value.fileName}
+                  className={styles.thumbnailImage}
+                  onError={(e) => {
+                    // Fallback to icon if image fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      const icon = document.createElement('span');
+                      icon.className = styles.fileIcon;
+                      icon.textContent = getFileIcon(value.fileType);
+                      parent.appendChild(icon);
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <span className={styles.fileIcon}>{getFileIcon(value.fileType)}</span>
+            )}
             <div className={styles.fileMetadata}>
               <div className={styles.fileName}>{value.fileName}</div>
               <div className={styles.fileSize}>{formatFileSize(value.fileSize)}</div>
