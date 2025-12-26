@@ -25,14 +25,30 @@ jobs:
       run: npm ci
     - name: Install PostgreSQL client and DNS tools
       run: sudo apt-get update && sudo apt-get install -y postgresql-client dnsutils
-    - name: Disable IPv6 to avoid connection issues
-      run: |
-        sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
-        sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
-        echo "IPv6 disabled"
     - name: Seed remote database with test users
       if: env.SUPABASE_DB_URL != ''
       run: |
+        # Extract hostname from database URL
+        DB_HOST=$(echo "$SUPABASE_DB_URL" | sed -E 's|.*@([^:]+):.*|\1|')
+        echo "Resolving $DB_HOST to IPv4..."
+        
+        # Resolve to IPv4 BEFORE disabling IPv6
+        IPV4_ADDR=$(dig +short A "$DB_HOST" | grep -E '^[0-9.]+$' | head -n1)
+        
+        if [ -n "$IPV4_ADDR" ]; then
+          echo "✓ Resolved to IPv4: $IPV4_ADDR"
+          # Replace hostname with IPv4 in the URL
+          export SUPABASE_DB_URL=$(echo "$SUPABASE_DB_URL" | sed "s|@$DB_HOST:|@$IPV4_ADDR:|")
+        else
+          echo "⚠ Could not resolve to IPv4, will try original hostname"
+        fi
+        
+        # Disable IPv6 to prevent connection attempts over IPv6
+        sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+        sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
+        echo "✓ IPv6 disabled"
+        
+        # Run the seed script
         chmod +x scripts/seed-remote.sh
         ./scripts/seed-remote.sh
       continue-on-error: true
