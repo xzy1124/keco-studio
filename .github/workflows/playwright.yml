@@ -23,8 +23,13 @@ jobs:
         node-version: lts/*
     - name: Install dependencies
       run: npm ci
-    - name: Install PostgreSQL client
-      run: sudo apt-get update && sudo apt-get install -y postgresql-client
+    - name: Install PostgreSQL client and DNS tools
+      run: sudo apt-get update && sudo apt-get install -y postgresql-client dnsutils
+    - name: Disable IPv6 to avoid connection issues
+      run: |
+        sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+        sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
+        echo "IPv6 disabled"
     - name: Seed remote database with test users
       if: env.SUPABASE_DB_URL != ''
       run: |
