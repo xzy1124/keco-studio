@@ -342,6 +342,13 @@ export function LibraryAssetsTable({
     }
   };
 
+  // Handle navigate to predefine page
+  const handlePredefineClick = () => {
+    const projectId = params.projectId as string;
+    const libraryId = params.libraryId as string;
+    router.push(`/${projectId}/${libraryId}/predefine`);
+  };
+
   if (!hasProperties) {
     return (
       <div className={styles.tableContainer}>
@@ -356,7 +363,7 @@ export function LibraryAssetsTable({
           <p className={styles.emptyStateText}>
             There is no any asset here. You need to create an asset firstly.
           </p>
-          <button className={styles.predefineButton}>
+          <button className={styles.predefineButton} onClick={handlePredefineClick}>
             <Image
               src={noassetIcon2}
               alt=""
