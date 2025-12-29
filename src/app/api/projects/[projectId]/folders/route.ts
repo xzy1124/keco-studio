@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 
-type Params = { params: { projectId: string } };
+type Params = { params: Promise<{ projectId: string }> };
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -22,15 +21,19 @@ async function resolveProjectId(supabase: any, projectIdOrName: string): Promise
 }
 
 export async function GET(_req: Request, { params }: Params) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  const { projectId: projectIdParam } = await params;
   let projectId: string;
   try {
-    projectId = await resolveProjectId(supabase, params.projectId);
+    projectId = await resolveProjectId(supabase, projectIdParam);
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Project not found' }, { status: 404 });
   }
@@ -49,7 +52,10 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function POST(request: Request, { params }: Params) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -64,9 +70,10 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
   }
 
+  const { projectId: projectIdParam } = await params;
   let projectId: string;
   try {
-    projectId = await resolveProjectId(supabase, params.projectId);
+    projectId = await resolveProjectId(supabase, projectIdParam);
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Project not found' }, { status: 404 });
   }
