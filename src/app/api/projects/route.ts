@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   // 1. If function returns JSON type, Supabase RPC returns the JSON object directly (not array)
   // 2. If function returns TABLE type, Supabase RPC returns an array
   let result: any;
-  
+
   if (Array.isArray(data)) {
     // TABLE return type - get first element
     if (data.length === 0) {
@@ -113,4 +113,3 @@ export async function POST(request: Request) {
     { status: 201 }
   );
 }
-

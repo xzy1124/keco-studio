@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Image from 'next/image';
 import { useSupabase } from '@/lib/SupabaseContext';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
@@ -131,7 +132,32 @@ export function MediaFileUpload({ value, onChange, disabled }: MediaFileUploadPr
       {value && (
         <div className={styles.fileInfo}>
           <div className={styles.fileDetails}>
-            <span className={styles.fileIcon}>{getFileIcon(value.fileType)}</span>
+            {isImageFile(value.fileType) ? (
+              <div className={styles.imageThumbnail}>
+                <Image
+                  src={value.url}
+                  alt={value.fileName}
+                  width={48}
+                  height={48}
+                  className={styles.thumbnailImage}
+                  unoptimized
+                  onError={(e) => {
+                    // Fallback to icon if image fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      const icon = document.createElement('span');
+                      icon.className = styles.fileIcon;
+                      icon.textContent = getFileIcon(value.fileType);
+                      parent.appendChild(icon);
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <span className={styles.fileIcon}>{getFileIcon(value.fileType)}</span>
+            )}
             <div className={styles.fileMetadata}>
               <div className={styles.fileName}>{value.fileName}</div>
               <div className={styles.fileSize}>{formatFileSize(value.fileSize)}</div>
@@ -181,10 +207,14 @@ export function MediaFileUpload({ value, onChange, disabled }: MediaFileUploadPr
               </button>
             </div>
             <div className={styles.modalBody}>
-              <img
+              <Image
                 src={value.url}
                 alt={value.fileName}
+                width={800}
+                height={600}
                 className={styles.previewImage}
+                unoptimized
+                style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: 'calc(90vh - 160px)' }}
               />
             </div>
             <div className={styles.modalFooter}>

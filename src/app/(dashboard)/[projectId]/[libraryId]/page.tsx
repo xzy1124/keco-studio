@@ -18,7 +18,6 @@ import {
   getLibrarySummary,
   createAsset,
   updateAsset,
-  deleteAsset,
 } from '@/lib/services/libraryAssetsService';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import styles from './page.module.css';
@@ -185,6 +184,8 @@ export default function LibraryPage() {
       setSaveSuccess('Asset created');
       setAssetName('');
       setValues({});
+      // Notify Sidebar to refresh assets for this library
+      window.dispatchEvent(new CustomEvent('assetCreated', { detail: { libraryId } }));
     } catch (e: any) {
       setSaveError(e?.message || 'Failed to create asset');
     } finally {
@@ -198,22 +199,13 @@ export default function LibraryPage() {
     // Refresh asset rows
     const rows = await getLibraryAssetsWithProperties(supabase, libraryId);
     setAssetRows(rows);
+    // Notify Sidebar to refresh assets for this library
+    window.dispatchEvent(new CustomEvent('assetCreated', { detail: { libraryId } }));
   };
 
   // Callback for updating asset from table
   const handleUpdateAssetFromTable = async (assetId: string, assetName: string, propertyValues: Record<string, any>) => {
     await updateAsset(supabase, assetId, assetName, propertyValues);
-    // Refresh asset rows
-    const rows = await getLibraryAssetsWithProperties(supabase, libraryId);
-    setAssetRows(rows);
-  };
-
-  // Callback for deleting asset from table
-  const handleDeleteAssetFromTable = async (assetId: string) => {
-    if (!confirm('Are you sure you want to delete this asset?')) {
-      return;
-    }
-    await deleteAsset(supabase, assetId);
     // Refresh asset rows
     const rows = await getLibraryAssetsWithProperties(supabase, libraryId);
     setAssetRows(rows);
@@ -274,7 +266,6 @@ export default function LibraryPage() {
         rows={assetRows}
         onSaveAsset={handleSaveAssetFromTable}
         onUpdateAsset={handleUpdateAssetFromTable}
-        onDeleteAsset={handleDeleteAssetFromTable}
       />
 
       {saveError && (
