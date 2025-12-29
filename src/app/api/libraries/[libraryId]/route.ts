@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-type Params = { params: { libraryId: string } };
+type Params = { params: Promise<{ libraryId: string }> };
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -16,11 +16,12 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  const { libraryId } = await params;
   let query = supabase.from('libraries').select('*');
-  if (isUuid(params.libraryId)) {
-    query = query.eq('id', params.libraryId);
+  if (isUuid(libraryId)) {
+    query = query.eq('id', libraryId);
   } else {
-    query = query.eq('name', params.libraryId);
+    query = query.eq('name', libraryId);
   }
 
   const { data, error } = await query.single();
