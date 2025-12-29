@@ -26,6 +26,10 @@ jobs:
       if: env.SUPABASE_SERVICE_ROLE_KEY != ''
       run: npm run seed:api
       continue-on-error: true
+    - name: Clean test data before running tests
+      if: env.SUPABASE_SERVICE_ROLE_KEY != ''
+      run: npm run clean:test-data
+      continue-on-error: true
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
     - name: Run Playwright tests

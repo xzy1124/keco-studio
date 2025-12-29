@@ -31,6 +31,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:e2e": "playwright test",
-    "seed:api": "tsx scripts/seed-via-api.ts"
+    "test:e2e:clean": "tsx scripts/clean-remote-test-data.ts && playwright test",
+    "seed:api": "tsx scripts/seed-via-api.ts",
+    "clean:test-data": "tsx scripts/clean-remote-test-data.ts"
   }
 }
