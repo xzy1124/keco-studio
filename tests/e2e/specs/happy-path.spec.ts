@@ -236,14 +236,14 @@ test.describe('Happy Path - Complete User Journey', () => {
   // Additional Happy Path Variations (Optional)
   // ==========================================
 
-  test.skip('should handle template creation with only string fields', async () => {
-    // Simplified version testing only basic string fields
-    // Can be implemented for regression testing
-  });
+  // test.skip('should handle template creation with only string fields', async () => {
+  //   // Simplified version testing only basic string fields
+  //   // Can be implemented for regression testing
+  // });
 
-  test.skip('should create multiple assets from same template', async () => {
-    // Tests asset creation scalability
-    // Can be implemented for load testing
-  });
+  // test.skip('should create multiple assets from same template', async () => {
+  //   // Tests asset creation scalability
+  //   // Can be implemented for load testing
+  // });
 });
 

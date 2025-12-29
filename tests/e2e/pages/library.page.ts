@@ -65,19 +65,15 @@ export class LibraryPage {
       .or(page.getByRole('button', { name: /add/i }).filter({ has: page.locator('img[alt="Add library"]') }));
     
     // AddLibraryMenu button (appears after clicking sidebar add button)
-    // Note: There are two "Create new library" buttons:
-    // 1. Sidebar treeitem button (Sidebar_createButton__oNFd8) - not what we want
-    // 2. AddLibraryMenu menu item button (AddLibraryMenu_menuItem__4kY8s) - this is what we want
-    // Use class selector to specifically target AddLibraryMenu button (the second one in the error)
-    // Select the button with AddLibraryMenu_menuItem class that contains "Create new library" text
-    this.addLibraryMenuButton = page.locator('button[class*="AddLibraryMenu_menuItem"]')
-      .filter({ hasText: /^Create new library$/ })
-      .first();
+    // Note: AddLibraryMenu is rendered via createPortal to document.body
+    // Use more flexible selectors that work with the portal
+    this.addLibraryMenuButton = page.getByRole('button', { name: /create new library/i })
+      .filter({ hasNotText: /resources folder/i }) // Exclude sidebar buttons
+      .last(); // Use last() to get the portal menu button
     
     // AddLibraryMenu "Create new folder" button
-    this.addFolderMenuButton = page.locator('button[class*="AddLibraryMenu_menuItem"]')
-      .filter({ hasText: /^Create new folder$/ })
-      .first();
+    this.addFolderMenuButton = page.getByRole('button', { name: /create new folder/i })
+      .last(); // Use last() to get the portal menu button if there are duplicates
 
     // Folder form inputs
     // Note: NewFolderModal uses a plain input with placeholder, not a labeled input
@@ -187,7 +183,8 @@ export class LibraryPage {
     await this.sidebarAddButton.click();
 
     // Step 2: Wait for AddLibraryMenu to appear and click "Create new library"
-    await expect(this.addLibraryMenuButton).toBeVisible({ timeout: 3000 });
+    // Increase timeout to allow menu animation to complete
+    await expect(this.addLibraryMenuButton).toBeVisible({ timeout: 10000 });
     await this.addLibraryMenuButton.click();
 
     // Step 3: Wait for library creation modal to appear
@@ -221,7 +218,8 @@ export class LibraryPage {
     await this.sidebarAddButton.click();
 
     // Step 2: Wait for AddLibraryMenu to appear and click "Create new folder"
-    await expect(this.addFolderMenuButton).toBeVisible({ timeout: 3000 });
+    // Increase timeout to allow menu animation to complete
+    await expect(this.addFolderMenuButton).toBeVisible({ timeout: 10000 });
     await this.addFolderMenuButton.click();
 
     // Step 3: Wait for folder creation modal to appear
