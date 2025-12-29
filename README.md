@@ -2,6 +2,10 @@
 
 This document describes how to locally deploy and run the `keco-studio` project on **macOS or Windows**.
 
+> **📚 Additional Documentation:**
+> - [CI/GitHub Actions Setup Guide](docs/CI_SETUP.md) - Configure automated testing
+> - [Environment Setup](docs/ENVIRONMENT_SETUP.md) - Detailed environment variable configuration
+
 ---
 
 ## 1. Prerequisites

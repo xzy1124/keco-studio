@@ -6,9 +6,11 @@ coverage/
 playwright-report/
 playwright-reports/
 playwright/.cache/
+test-results/
 .eslintcache
 .env
 .env.*
+!.env.example
 .DS_Store
 Thumbs.db
 .env.local
