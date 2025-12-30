@@ -1164,7 +1164,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
           projects.length > 0 &&
           projects.some((p) => p.id === currentIds.projectId) && (
             <>
-              {!currentIds.isPredefinePage && (
+              {!currentIds.isPredefinePage && !currentIds.assetId && (
                 <div className={styles.sectionTitle}>
                   <span>Libraries</span>
                   <button
