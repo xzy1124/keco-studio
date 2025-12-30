@@ -726,6 +726,58 @@
   min-width: 0; /* Allow text to shrink */
 }
 
+/* Library item active state (when on library page) */
+.libraryItemActive {
+  background-color: #fff1f2 !important;
+  border-radius: 8px;
+}
+
+/* Library item active state with padding (when viewing an asset) */
+.libraryItemActiveWithPadding {
+  background-color: #fff1f2 !important;
+  border-radius: 8px;
+  padding: 8px 12px !important;
+  min-height: 40px;
+}
+
+.libraryBackButton {
+  margin-right: 8px;
+  padding: 0;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Asset item active state (when viewing an asset) */
+.assetItemActive {
+  background-color: rgba(255, 0, 94, 0.06) !important;
+  border-radius: 8px;
+  min-height: 40px;
+}
+
+/* Asset list container (when on asset page) */
+.assetList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.assetList .itemRow {
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.assetList .itemRow:hover {
+  background-color: #f8fafc;
+}
+
 .iconButton {
   background: none;
   border: none;
@@ -929,4 +981,56 @@
   white-space: nowrap;
   flex: 1;
   min-width: 0; /* Allow text to shrink */
+}
+
+/* Library item active state (when on library page) */
+.libraryItemActive {
+  background-color: #fff1f2 !important;
+  border-radius: 8px;
+}
+
+/* Library item active state with padding (when viewing an asset) */
+.libraryItemActiveWithPadding {
+  background-color: #fff1f2 !important;
+  border-radius: 8px;
+  padding: 8px 12px !important;
+  min-height: 40px;
+}
+
+.libraryBackButton {
+  margin-right: 8px;
+  padding: 0;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Asset item active state (when viewing an asset) */
+.assetItemActive {
+  background-color: rgba(255, 0, 94, 0.06) !important;
+  border-radius: 8px;
+  min-height: 40px;
+}
+
+/* Asset list container (when on asset page) */
+.assetList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.assetList .itemRow {
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.assetList .itemRow:hover {
+  background-color: #f8fafc;
 }

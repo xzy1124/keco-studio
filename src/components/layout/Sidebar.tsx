@@ -15,6 +15,8 @@ import searchIcon from "@/app/assets/images/searchIcon.svg";
 import projectRightIcon from "@/app/assets/images/ProjectRightIcon.svg";
 import sidebarFolderIcon from "@/app/assets/images/SidebarFloderIcon.svg";
 import sidebarFolderIcon2 from "@/app/assets/images/SidebarFolderIcon2.svg";
+import sidebarFolderIcon3 from "@/app/assets/images/SidebarFloderIcon3.svg";
+import sidebarFolderIcon4 from "@/app/assets/images/SidebarFloderIcon4.svg";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -142,6 +144,8 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     let libraryId: string | null = null;
     let folderId: string | null = null;
     let isPredefinePage = false;
+    let assetId: string | null = null;
+    let isLibraryPage = false; // True when on /[projectId]/[libraryId] (not predefine, not asset)
     
     if (parts.length >= 2 && parts[1] === 'folder' && parts[2]) {
       // URL format: /[projectId]/folder/[folderId]
@@ -150,12 +154,17 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
       // URL format: /[projectId]/[libraryId]/predefine
       libraryId = parts[1];
       isPredefinePage = true;
-    } else if (parts.length >= 2) {
-      // URL format: /[projectId]/[libraryId]
+    } else if (parts.length >= 3) {
+      // URL format: /[projectId]/[libraryId]/[assetId] or /[projectId]/[libraryId]/new
       libraryId = parts[1];
+      assetId = parts[2];
+    } else if (parts.length >= 2) {
+      // URL format: /[projectId]/[libraryId] - library page
+      libraryId = parts[1];
+      isLibraryPage = true;
     }
     
-    return { projectId, libraryId, folderId, isPredefinePage };
+    return { projectId, libraryId, folderId, isPredefinePage, assetId, isLibraryPage };
   }, [pathname]);
 
   const fetchProjects = useCallback(async () => {
@@ -478,13 +487,36 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         createButtonNode, // Always first
         ...folderLibraries.map((lib) => {
           const libProjectId = lib.project_id;
+          // Show selected state when on library page OR when viewing an asset in this library
+          const isCurrentLibrary = currentIds.libraryId === lib.id && (currentIds.isLibraryPage || !!currentIds.assetId);
+          // Show icons only when viewing an asset (not on library page)
+          const showAssetPageIcons = currentIds.libraryId === lib.id && !!currentIds.assetId;
           return {
             title: (
               <div 
-                className={styles.itemRow}
+                className={`${styles.itemRow} ${isCurrentLibrary ? (showAssetPageIcons ? styles.libraryItemActiveWithPadding : styles.libraryItemActive) : ''}`}
                 onContextMenu={(e) => handleContextMenu(e, 'library', lib.id)}
               >
                 <div className={styles.itemMain}>
+                  {showAssetPageIcons && (
+                    <button
+                      className={styles.libraryBackButton}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (currentIds.projectId) {
+                          router.push(`/${currentIds.projectId}`);
+                        }
+                      }}
+                      title="Back to tree view"
+                    >
+                      <Image
+                        src={sidebarFolderIcon3}
+                        alt="Back"
+                        width={24}
+                        height={24}
+                      />
+                    </button>
+                  )}
                   <div className={styles.libraryIconContainer}>
                     <Image
                       src={libraryBookIcon}
@@ -507,7 +539,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                       onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
                     >
                       <Image
-                        src={predefineSettingIcon}
+                        src={showAssetPageIcons ? sidebarFolderIcon4 : predefineSettingIcon}
                         alt="Predefine"
                         width={22}
                         height={22}
@@ -559,22 +591,25 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                 isLeaf: true,
               },
               // Existing assets
-              ...(assets[lib.id] || []).map<DataNode>((asset) => ({
-                title: (
-                  <div 
-                    className={styles.itemRow}
-                    onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
-                  >
-                    <div className={styles.itemMain}>
-                      <span className={styles.itemText}>{asset.name}</span>
+              ...(assets[lib.id] || []).map<DataNode>((asset) => {
+                const isCurrentAsset = currentIds.assetId === asset.id;
+                return {
+                  title: (
+                    <div 
+                      className={`${styles.itemRow} ${isCurrentAsset ? styles.assetItemActive : ''}`}
+                      onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
+                    >
+                      <div className={styles.itemMain}>
+                        <span className={styles.itemText}>{asset.name}</span>
+                      </div>
+                      <div className={styles.itemActions}>
+                      </div>
                     </div>
-                    <div className={styles.itemActions}>
-                    </div>
-                  </div>
-                ),
-                key: `asset-${asset.id}`,
-                isLeaf: true,
-              })),
+                  ),
+                  key: `asset-${asset.id}`,
+                  isLeaf: true,
+                };
+              }),
             ],
           };
         }),
@@ -617,13 +652,36 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     const rootLibraries = librariesByFolder.get('') || [];
     rootLibraries.forEach((lib) => {
       const libProjectId = lib.project_id;
+      // Show selected state when on library page OR when viewing an asset in this library
+      const isCurrentLibrary = currentIds.libraryId === lib.id && (currentIds.isLibraryPage || !!currentIds.assetId);
+      // Show icons only when viewing an asset (not on library page)
+      const showAssetPageIcons = currentIds.libraryId === lib.id && !!currentIds.assetId;
       result.push({
         title: (
           <div 
-            className={styles.itemRow}
+            className={`${styles.itemRow} ${isCurrentLibrary ? (showAssetPageIcons ? styles.libraryItemActiveWithPadding : styles.libraryItemActive) : ''}`}
             onContextMenu={(e) => handleContextMenu(e, 'library', lib.id)}
           >
             <div className={styles.itemMain}>
+              {showAssetPageIcons && (
+                <button
+                  className={styles.libraryBackButton}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (currentIds.projectId) {
+                      router.push(`/${currentIds.projectId}`);
+                    }
+                  }}
+                  title="Back to tree view"
+                >
+                  <Image
+                    src={sidebarFolderIcon3}
+                    alt="Back"
+                    width={24}
+                    height={24}
+                  />
+                </button>
+              )}
               <div className={styles.libraryIconContainer}>
                 <Image
                   src={libraryBookIcon}
@@ -646,10 +704,10 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                   onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
                 >
                   <Image
-                    src={predefineSettingIcon}
+                    src={showAssetPageIcons ? sidebarFolderIcon4 : predefineSettingIcon}
                     alt="Predefine"
-                    width={18}
-                    height={18}
+                    width={22}
+                    height={22}
                   />
                 </button>
               </Tooltip>
@@ -698,25 +756,28 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
             isLeaf: true,
           },
           // Existing assets
-          ...(assets[lib.id] || []).map<DataNode>((asset) => ({
-            title: (
-              <div className={styles.itemRow}>
-                <div className={styles.itemMain}>
-                  <span className={styles.itemText}>{asset.name}</span>
+          ...(assets[lib.id] || []).map<DataNode>((asset) => {
+            const isCurrentAsset = currentIds.assetId === asset.id;
+            return {
+              title: (
+                <div className={`${styles.itemRow} ${isCurrentAsset ? styles.assetItemActive : ''}`}>
+                  <div className={styles.itemMain}>
+                    <span className={styles.itemText}>{asset.name}</span>
+                  </div>
+                  <div className={styles.itemActions}>
+                  </div>
                 </div>
-                <div className={styles.itemActions}>
-                </div>
-              </div>
-            ),
-            key: `asset-${asset.id}`,
-            isLeaf: true,
-          })),
+              ),
+              key: `asset-${asset.id}`,
+              isLeaf: true,
+            };
+          }),
         ],
       });
     });
     
     return result;
-  }, [folders, libraries, assets, currentIds.projectId, handleLibraryPredefineClick, router]);
+  }, [folders, libraries, assets, currentIds.projectId, currentIds.libraryId, currentIds.isLibraryPage, currentIds.assetId, handleLibraryPredefineClick, router]);
 
   const selectedKey = useMemo(() => {
     const keys: string[] = [];
@@ -728,18 +789,19 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     
     // Add selected library or asset
     if (currentIds.libraryId) {
-      const parts = pathname.split("/").filter(Boolean);
-      if (parts.length >= 3 && parts[1] !== 'folder') {
+      if (currentIds.assetId && currentIds.assetId !== 'new' && currentIds.assetId !== 'predefine') {
         // Asset: /[projectId]/[libraryId]/[assetId]
-        keys.push(`asset-${parts[2]}`);
-      } else {
+        keys.push(`asset-${currentIds.assetId}`);
+        // Also select the library when viewing an asset
+        keys.push(`library-${currentIds.libraryId}`);
+      } else if (currentIds.isLibraryPage) {
         // Library: /[projectId]/[libraryId]
         keys.push(`library-${currentIds.libraryId}`);
       }
     }
     
     return keys;
-  }, [pathname, currentIds.folderId, currentIds.libraryId]);
+  }, [pathname, currentIds.folderId, currentIds.libraryId, currentIds.assetId, currentIds.isLibraryPage]);
 
   const onSelect = (_keys: React.Key[], info: any) => {
     const key: string = info.node.key;
@@ -1015,7 +1077,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
       </div>
 
       <div className={styles.content}>
-        {!currentIds.isPredefinePage && (
+        {!currentIds.isPredefinePage && !currentIds.assetId && (
           <>
             <div className={styles.sectionTitle}>
               <span>Projects</span>
@@ -1159,6 +1221,127 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                           </span>
                         </div>
                       </div>
+                    );
+                  })()
+                ) : currentIds.assetId && currentIds.libraryId ? (
+                  // Asset page: Show library with assets list
+                  (() => {
+                    const currentLibrary = libraries.find(lib => lib.id === currentIds.libraryId);
+                    const libraryName = currentLibrary?.name || 'Library';
+                    const libraryAssets = assets[currentIds.libraryId] || [];
+                    return (
+                      <>
+                        {/* Library item */}
+                        <div className={`${styles.itemRow} ${styles.libraryItemActiveWithPadding}`}>
+                          <div className={styles.itemMain}>
+                            <button
+                              className={styles.libraryBackButton}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (currentIds.projectId) {
+                                  router.push(`/${currentIds.projectId}`);
+                                }
+                              }}
+                              title="Back to tree view"
+                            >
+                              <Image
+                                src={sidebarFolderIcon3}
+                                alt="Back"
+                                width={24}
+                                height={24}
+                              />
+                            </button>
+                            <div className={styles.libraryIconContainer}>
+                              <Image
+                                src={libraryBookIcon}
+                                alt="Library"
+                                width={24}
+                                height={24}
+                              />
+                            </div>
+                            <span className={styles.itemText}>{libraryName}</span>
+                          </div>
+                          <div className={styles.itemActions}>
+                            <Tooltip
+                              title="Predefine asset here"
+                              placement="top"
+                              color="#8B5CF6"
+                            >
+                              <button
+                                className={styles.iconButton}
+                                aria-label="Library sections"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (currentIds.projectId && currentIds.libraryId) {
+                                    handleLibraryPredefineClick(currentIds.projectId, currentIds.libraryId, e);
+                                  }
+                                }}
+                              >
+                                <Image
+                                  src={sidebarFolderIcon4}
+                                  alt="Predefine"
+                                  width={22}
+                                  height={22}
+                                />
+                              </button>
+                            </Tooltip>
+                          </div>
+                        </div>
+                        {/* Add new asset button */}
+                        <button
+                          className={styles.createButton}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (currentIds.projectId && currentIds.libraryId) {
+                              router.push(`/${currentIds.projectId}/${currentIds.libraryId}/new`);
+                            }
+                          }}
+                        >
+                          <span className={styles.createButtonText}>
+                            <span className={styles.plusIcon}>
+                              <Image
+                                src={plusHorizontal}
+                                alt=""
+                                width={17}
+                                height={2}
+                                className={styles.plusHorizontal}
+                              />
+                              <Image
+                                src={plusVertical}
+                                alt=""
+                                width={2}
+                                height={17}
+                                className={styles.plusVertical}
+                              />
+                            </span>
+                            {' '}Add new asset
+                          </span>
+                        </button>
+                        {/* Assets list */}
+                        <div className={styles.assetList}>
+                          {libraryAssets.map((asset) => {
+                            const isCurrentAsset = currentIds.assetId === asset.id;
+                            return (
+                              <div
+                                key={asset.id}
+                                className={`${styles.itemRow} ${isCurrentAsset ? styles.assetItemActive : ''}`}
+                                onClick={() => {
+                                  if (currentIds.projectId && currentIds.libraryId) {
+                                    handleAssetClick(currentIds.projectId, currentIds.libraryId, asset.id);
+                                  }
+                                }}
+                                onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
+                              >
+                                <div className={styles.itemMain}>
+                                  <span className={styles.itemText}>{asset.name}</span>
+                                </div>
+                                <div className={styles.itemActions}>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
                     );
                   })()
                 ) : (
