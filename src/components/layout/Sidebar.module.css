@@ -764,7 +764,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 0 !important; /* Remove margin-top, use margin-bottom on createButton instead */
 }
 
 .assetList .itemRow {
@@ -777,6 +777,27 @@
 .assetList .itemRow:hover {
   background-color: #f8fafc;
 }
+
+/* Aligned create button for asset page (aligned with back button) */
+.createButtonAligned {
+  padding: 8px 12px !important; /* Same padding as asset list items for consistent height */
+  height: 40px !important; /* Fixed height to match asset items exactly */
+  min-height: 40px !important; /* Same height as asset list items */
+  display: flex !important;
+  align-items: center !important; /* Vertical center content */
+  box-sizing: border-box !important;
+  margin: 0 !important; /* Remove all margins */
+}
+
+/* Adjust icon position to align with library back button */
+.createButtonAligned .createButtonText {
+  margin-left: 0 !important; /* Remove any default margin */
+  padding-left: 0 !important; /* Remove any default padding */
+}
+
+/* The icon should align with the back button which is at position: 
+   library padding-left (12px) + back button position (0px) = 12px from library container edge
+   But since createButtonAligned also has padding-left 12px, the icon should be at 0px from createButtonText start */
 
 .iconButton {
   background: none;
@@ -1021,7 +1042,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 0 !important; /* Remove margin-top, use margin-bottom on createButton instead */
 }
 
 .assetList .itemRow {
@@ -1034,3 +1055,24 @@
 .assetList .itemRow:hover {
   background-color: #f8fafc;
 }
+
+/* Aligned create button for asset page (aligned with back button) */
+.createButtonAligned {
+  padding: 8px 12px !important; /* Same padding as asset list items for consistent height */
+  height: 40px !important; /* Fixed height to match asset items exactly */
+  min-height: 40px !important; /* Same height as asset list items */
+  display: flex !important;
+  align-items: center !important; /* Vertical center content */
+  box-sizing: border-box !important;
+  margin: 0 !important; /* Remove all margins */
+}
+
+/* Adjust icon position to align with library back button */
+.createButtonAligned .createButtonText {
+  margin-left: 0 !important; /* Remove any default margin */
+  padding-left: 0 !important; /* Remove any default padding */
+}
+
+/* The icon should align with the back button which is at position: 
+   library padding-left (12px) + back button position (0px) = 12px from library container edge
+   But since createButtonAligned also has padding-left 12px, the icon should be at 0px from createButtonText start */

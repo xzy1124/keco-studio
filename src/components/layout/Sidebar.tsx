@@ -17,6 +17,7 @@ import sidebarFolderIcon from "@/app/assets/images/SidebarFloderIcon.svg";
 import sidebarFolderIcon2 from "@/app/assets/images/SidebarFolderIcon2.svg";
 import sidebarFolderIcon3 from "@/app/assets/images/SidebarFloderIcon3.svg";
 import sidebarFolderIcon4 from "@/app/assets/images/SidebarFloderIcon4.svg";
+import sidebarFolderIcon5 from "@/app/assets/images/SidebarFolderInco5.svg";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -1289,7 +1290,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                         </div>
                         {/* Add new asset button */}
                         <button
-                          className={styles.createButton}
+                          className={`${styles.createButton} ${styles.createButtonAligned}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (currentIds.projectId && currentIds.libraryId) {
@@ -1298,22 +1299,12 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                           }}
                         >
                           <span className={styles.createButtonText}>
-                            <span className={styles.plusIcon}>
-                              <Image
-                                src={plusHorizontal}
-                                alt=""
-                                width={17}
-                                height={2}
-                                className={styles.plusHorizontal}
-                              />
-                              <Image
-                                src={plusVertical}
-                                alt=""
-                                width={2}
-                                height={17}
-                                className={styles.plusVertical}
-                              />
-                            </span>
+                            <Image
+                              src={sidebarFolderIcon5}
+                              alt="Add"
+                              width={24}
+                              height={24}
+                            />
                             {' '}Add new asset
                           </span>
                         </button>
