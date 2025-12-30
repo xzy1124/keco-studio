@@ -13,6 +13,8 @@ import createProjectIcon from "@/app/assets/images/createProjectIcon.svg";
 import addProjectIcon from "@/app/assets/images/addProjectIcon.svg";
 import searchIcon from "@/app/assets/images/searchIcon.svg";
 import projectRightIcon from "@/app/assets/images/ProjectRightIcon.svg";
+import sidebarFolderIcon from "@/app/assets/images/SidebarFloderIcon.svg";
+import sidebarFolderIcon2 from "@/app/assets/images/SidebarFolderIcon2.svg";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -135,20 +137,25 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
 
   const currentIds = useMemo(() => {
     const parts = pathname.split("/").filter(Boolean);
-    // Handle /[projectId]/[libraryId] or /[projectId]/folder/[folderId] structure
+    // Handle /[projectId]/[libraryId] or /[projectId]/folder/[folderId] or /[projectId]/[libraryId]/predefine structure
     const projectId = parts[0] || null;
     let libraryId: string | null = null;
     let folderId: string | null = null;
+    let isPredefinePage = false;
     
     if (parts.length >= 2 && parts[1] === 'folder' && parts[2]) {
       // URL format: /[projectId]/folder/[folderId]
       folderId = parts[2];
+    } else if (parts.length >= 3 && parts[2] === 'predefine') {
+      // URL format: /[projectId]/[libraryId]/predefine
+      libraryId = parts[1];
+      isPredefinePage = true;
     } else if (parts.length >= 2) {
       // URL format: /[projectId]/[libraryId]
       libraryId = parts[1];
     }
     
-    return { projectId, libraryId, folderId };
+    return { projectId, libraryId, folderId, isPredefinePage };
   }, [pathname]);
 
   const fetchProjects = useCallback(async () => {
@@ -1092,43 +1099,115 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
             <>
               <div className={styles.sectionTitle}>
                 <span>Libraries</span>
-                <button
-                  ref={setAddButtonRef}
-                  className={styles.addButton}
-                  onClick={handleAddButtonClick}
-                  title="Add new folder or library"
-                >
-                  <Image
-                    src={addProjectIcon}
-                    alt="Add library"
-                    width={24}
-                    height={24}
-                  />
-                </button>
+                {!currentIds.isPredefinePage && (
+                  <button
+                    ref={setAddButtonRef}
+                    className={styles.addButton}
+                    onClick={handleAddButtonClick}
+                    title="Add new folder or library"
+                  >
+                    <Image
+                      src={addProjectIcon}
+                      alt="Add library"
+                      width={24}
+                      height={24}
+                    />
+                  </button>
+                )}
               </div>
               {(loadingFolders || loadingLibraries) && (
                 <div className={styles.hint}>Loading libraries...</div>
               )}
               <div className={styles.sectionList}>
-                <div className={styles.treeWrapper}>
-                  <Tree
-                    className={styles.tree}
-                    showIcon={false}
-                    treeData={treeData}
-                    selectedKeys={selectedKey}
-                    onSelect={onSelect}
-                    onExpand={onExpand}
-                    switcherIcon={switcherIcon}
-                    expandedKeys={expandedKeys}
-                    motion={false}
-                  />
-                </div>
-                {!loadingFolders &&
-                  !loadingLibraries &&
-                  folders.length === 0 &&
-                  libraries.length === 0 && (
-                    <div className={styles.hint}>No libraries. Create one.</div>
-                  )}
+                {currentIds.isPredefinePage && currentIds.libraryId ? (
+                  // Predefine page: Show special view with close button
+                  (() => {
+                    const currentLibrary = libraries.find(lib => lib.id === currentIds.libraryId);
+                    const libraryName = currentLibrary?.name || 'Library';
+                    return (
+                      <div 
+                        className={styles.itemRow} 
+                        style={{ 
+                          padding: '8px 12px', 
+                          marginBottom: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        <button
+                          className={styles.iconButton}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (currentIds.projectId && currentIds.libraryId) {
+                              router.push(`/${currentIds.projectId}/${currentIds.libraryId}`);
+                            }
+                          }}
+                          style={{ 
+                            marginRight: '0',
+                            padding: '4px', 
+                            cursor: 'pointer',
+                            border: 'none',
+                            background: 'transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          title="Back to library"
+                        >
+                          <Image
+                            src={sidebarFolderIcon2}
+                            alt="Close"
+                            width={24}
+                            height={24}
+                          />
+                        </button>
+                        <div 
+                          className={styles.itemMain} 
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px',
+                            flex: 1
+                          }}
+                        >
+                          <Image
+                            src={sidebarFolderIcon}
+                            alt="Library"
+                            width={24}
+                            height={24}
+                          />
+                          <span className={styles.itemText} style={{ fontWeight: 500 }}>
+                            Predefine {libraryName} Library
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  // Normal view: Show tree structure
+                  <>
+                    <div className={styles.treeWrapper}>
+                      <Tree
+                        className={styles.tree}
+                        showIcon={false}
+                        treeData={treeData}
+                        selectedKeys={selectedKey}
+                        onSelect={onSelect}
+                        onExpand={onExpand}
+                        switcherIcon={switcherIcon}
+                        expandedKeys={expandedKeys}
+                        motion={false}
+                      />
+                    </div>
+                    {!loadingFolders &&
+                      !loadingLibraries &&
+                      folders.length === 0 &&
+                      libraries.length === 0 && (
+                        <div className={styles.hint}>No libraries. Create one.</div>
+                      )}
+                  </>
+                )}
               </div>
             </>
           )}
