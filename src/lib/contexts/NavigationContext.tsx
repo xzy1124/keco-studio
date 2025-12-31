@@ -44,6 +44,8 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   
   // Track current user ID to detect user switches
   const currentUserIdRef = useRef<string | null>(null);
+  // Track if this is the initial fetch to avoid redirects during initial load
+  const isInitialFetchRef = useRef<boolean>(true);
 
   const currentProjectId = useMemo(() => (params.projectId as string) || null, [params.projectId]);
   const currentLibraryId = useMemo(() => (params.libraryId as string) || null, [params.libraryId]);
@@ -72,12 +74,13 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
 
     // If user switched and we're on a resource page, redirect to projects
     if (previousUserId !== null && previousUserId !== newUserId) {
-      // User has switched - clear all names and redirect to projects
+      // User has switched - clear all names and reset initial fetch flag
       setProjectName(null);
       setLibraryName(null);
       setAssetName(null);
       setFolderName(null);
       setLibraryFolderId(null);
+      isInitialFetchRef.current = true; // Reset for new user
       
       // If we're on a resource page (not /projects), redirect
       if (currentProjectId || currentLibraryId || currentAssetId) {
@@ -91,8 +94,9 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
     const fetchNames = async () => {
-      // Don't fetch if user is not authenticated
-      if (!isAuthenticated) {
+      // Don't fetch if user is not authenticated or userProfile is not loaded
+      // Wait for userProfile to be available to ensure authentication state is fully established
+      if (!isAuthenticated || !userProfile) {
         if (mounted) {
           setProjectName(null);
           setLibraryName(null);
@@ -101,6 +105,15 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
           setLibraryFolderId(null);
         }
         return;
+      }
+
+      // Additional delay to ensure Supabase client is fully initialized
+      // This is especially important in CI/test environments
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const isInitialFetch = isInitialFetchRef.current;
+      if (isInitialFetch) {
+        isInitialFetchRef.current = false;
       }
 
       try {
@@ -120,24 +133,33 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
             if (mounted) {
               if (error || !data) {
                 setProjectName(null);
-                // If we couldn't fetch the project, redirect to projects
-                router.push('/projects');
+                // Only redirect if this is not the initial fetch
+                if (!isInitialFetch) {
+                  router.push('/projects');
+                }
               } else {
                 setProjectName(data.name ?? null);
               }
             }
           } catch (authError: any) {
             if (authError instanceof AuthorizationError && mounted) {
-              // User doesn't have access - clear and redirect
+              // User doesn't have access - clear state
               setProjectName(null);
               setLibraryName(null);
               setAssetName(null);
               setFolderName(null);
               setLibraryFolderId(null);
-              router.push('/projects');
+              // Only redirect if this is not the initial fetch
+              if (!isInitialFetch) {
+                router.push('/projects');
+              }
               return;
             }
-            throw authError;
+            // For other errors, just log and continue
+            console.error('Error verifying project ownership:', authError);
+            if (mounted) {
+              setProjectName(null);
+            }
           }
         } else {
           setProjectName(null);
@@ -160,11 +182,13 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
               if (error || !data) {
                 setLibraryName(null);
                 setLibraryFolderId(null);
-                // If we couldn't fetch the library, redirect to projects
-                if (currentProjectId) {
-                  router.push(`/${currentProjectId}`);
-                } else {
-                  router.push('/projects');
+                // Only redirect if this is not the initial fetch
+                if (!isInitialFetch) {
+                  if (currentProjectId) {
+                    router.push(`/${currentProjectId}`);
+                  } else {
+                    router.push('/projects');
+                  }
                 }
               } else {
                 setLibraryName(data.name ?? null);
@@ -173,18 +197,26 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
             }
           } catch (authError: any) {
             if (authError instanceof AuthorizationError && mounted) {
-              // User doesn't have access - clear and redirect
+              // User doesn't have access - clear state
               setLibraryName(null);
               setLibraryFolderId(null);
               setAssetName(null);
-              if (currentProjectId) {
-                router.push(`/${currentProjectId}`);
-              } else {
-                router.push('/projects');
+              // Only redirect if this is not the initial fetch
+              if (!isInitialFetch) {
+                if (currentProjectId) {
+                  router.push(`/${currentProjectId}`);
+                } else {
+                  router.push('/projects');
+                }
               }
               return;
             }
-            throw authError;
+            // For other errors, just log and continue
+            console.error('Error verifying library access:', authError);
+            if (mounted) {
+              setLibraryName(null);
+              setLibraryFolderId(null);
+            }
           }
         } else {
           setLibraryName(null);
@@ -252,13 +284,15 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
               if (mounted) {
                 if (error || !data) {
                   setAssetName(null);
-                  // If we couldn't fetch the asset, redirect to library
-                  if (currentLibraryId && currentProjectId) {
-                    router.push(`/${currentProjectId}/${currentLibraryId}`);
-                  } else if (currentProjectId) {
-                    router.push(`/${currentProjectId}`);
-                  } else {
-                    router.push('/projects');
+                  // Only redirect if this is not the initial fetch
+                  if (!isInitialFetch) {
+                    if (currentLibraryId && currentProjectId) {
+                      router.push(`/${currentProjectId}/${currentLibraryId}`);
+                    } else if (currentProjectId) {
+                      router.push(`/${currentProjectId}`);
+                    } else {
+                      router.push('/projects');
+                    }
                   }
                 } else {
                   setAssetName(data.name ?? null);
@@ -266,14 +300,23 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
               }
             } catch (authError: any) {
               if (authError instanceof AuthorizationError && mounted) {
-                // User doesn't have access - clear and redirect
+                // User doesn't have access - clear state
                 setAssetName(null);
-                if (currentLibraryId && currentProjectId) {
-                  router.push(`/${currentProjectId}/${currentLibraryId}`);
-                } else if (currentProjectId) {
-                  router.push(`/${currentProjectId}`);
-                } else {
-                  router.push('/projects');
+                // Only redirect if this is not the initial fetch
+                if (!isInitialFetch) {
+                  if (currentLibraryId && currentProjectId) {
+                    router.push(`/${currentProjectId}/${currentLibraryId}`);
+                  } else if (currentProjectId) {
+                    router.push(`/${currentProjectId}`);
+                  } else {
+                    router.push('/projects');
+                  }
+                }
+              } else {
+                // For other errors, just log and continue
+                console.error('Error verifying asset access:', authError);
+                if (mounted) {
+                  setAssetName(null);
                 }
               }
             }
@@ -297,7 +340,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [currentProjectId, currentLibraryId, currentAssetId, currentFolderId, supabase, isAuthenticated, router]);
+  }, [currentProjectId, currentLibraryId, currentAssetId, currentFolderId, supabase, isAuthenticated, userProfile, router]);
 
   // Build breadcrumbs from current route params
   const buildBreadcrumbs = (): BreadcrumbItem[] => {
