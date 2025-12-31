@@ -14,7 +14,6 @@ import addProjectIcon from "@/app/assets/images/addProjectIcon.svg";
 import searchIcon from "@/app/assets/images/searchIcon.svg";
 import projectRightIcon from "@/app/assets/images/ProjectRightIcon.svg";
 import sidebarFolderIcon from "@/app/assets/images/SidebarFloderIcon.svg";
-import sidebarFolderIcon2 from "@/app/assets/images/SidebarFolderIcon2.svg";
 import sidebarFolderIcon3 from "@/app/assets/images/SidebarFloderIcon3.svg";
 import sidebarFolderIcon4 from "@/app/assets/images/SidebarFloderIcon4.svg";
 import sidebarFolderIcon5 from "@/app/assets/images/SidebarFolderInco5.svg";
@@ -31,6 +30,7 @@ import { AddLibraryMenu } from "@/components/libraries/AddLibraryMenu";
 import { listProjects, Project, deleteProject } from "@/lib/services/projectService";
 import { listLibraries, Library, deleteLibrary } from "@/lib/services/libraryService";
 import { listFolders, Folder, deleteFolder } from "@/lib/services/folderService";
+import { deleteAsset } from "@/lib/services/libraryAssetsService";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { ContextMenu, ContextMenuAction } from "./ContextMenu";
 import styles from "./Sidebar.module.css";
@@ -332,11 +332,8 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     e.stopPropagation();
     if (!window.confirm('Delete this asset?')) return;
     try {
-      const { error } = await supabase
-        .from('library_assets')
-        .delete()
-        .eq('id', assetId);
-      if (error) throw error;
+          
+      await deleteAsset(supabase, assetId);
       // Notify that asset was deleted
       window.dispatchEvent(new CustomEvent('assetDeleted', { detail: { libraryId } }));
       await fetchAssets(libraryId);
@@ -349,6 +346,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
       }
     } catch (err) {
       console.error('Failed to delete asset', err);
+      alert(err instanceof Error ? err.message : 'Failed to delete asset');
     }
   }, [supabase, fetchAssets, pathname, currentIds.projectId, router]);
 
@@ -1204,7 +1202,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                           title="Back to library"
                         >
                           <Image
-                            src={sidebarFolderIcon2}
+                            src={sidebarFolderIcon3}
                             alt="Close"
                             width={24}
                             height={24}

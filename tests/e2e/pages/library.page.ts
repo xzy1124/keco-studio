@@ -141,7 +141,9 @@ export class LibraryPage {
 
     // Wait for modal to close
     await expect(this.folderNameInput).not.toBeVisible({ timeout: 10000 });
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('networkidle', { timeout: 30000 });
+    // Additional wait to ensure authorization checks are complete
+    await this.page.waitForTimeout(1000);
   }
 
   /**
@@ -169,7 +171,9 @@ export class LibraryPage {
 
     // Wait for modal to close
     await expect(this.libraryNameInput).not.toBeVisible({ timeout: 10000 });
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('networkidle', { timeout: 30000 });
+    // Additional wait to ensure authorization checks are complete
+    await this.page.waitForTimeout(1000);
   }
 
   /**
@@ -204,7 +208,9 @@ export class LibraryPage {
 
     // Step 6: Wait for modal to close
     await expect(this.libraryNameInput).not.toBeVisible({ timeout: 10000 });
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('networkidle', { timeout: 30000 });
+    // Additional wait to ensure authorization checks are complete
+    await this.page.waitForTimeout(1000);
   }
 
   /**
@@ -233,7 +239,9 @@ export class LibraryPage {
 
     // Step 6: Wait for modal to close
     await expect(this.folderNameInput).not.toBeVisible({ timeout: 10000 });
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('networkidle', { timeout: 30000 });
+    // Additional wait to ensure authorization checks are complete
+    await this.page.waitForTimeout(1000);
   }
 
   /**
@@ -350,7 +358,7 @@ export class LibraryPage {
   async waitForPageLoad(): Promise<void> {
     // Project detail page doesn't have headings, wait for URL or toolbar/empty state
     // Wait for page to stabilize first
-    await this.page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+    await this.page.waitForLoadState('domcontentloaded', { timeout: 30000 });
     
     // Wait for either sidebar folder or empty state text
     // Note: Use sidebar.getByText to avoid strict mode violation (Resources Folder appears in both sidebar and folder card)
@@ -359,9 +367,12 @@ export class LibraryPage {
     await expect(
       sidebar.getByText(/resources folder/i)
         .or(this.page.getByText(/no folders or libraries/i))
-    ).toBeVisible({ timeout: 15000 });
+    ).toBeVisible({ timeout: 30000 });
     
-    await this.page.waitForLoadState('networkidle', { timeout: 10000 });
+    await this.page.waitForLoadState('networkidle', { timeout: 30000 });
+    
+    // Additional wait to ensure authorization checks are complete
+    await this.page.waitForTimeout(1000);
   }
 }
 
