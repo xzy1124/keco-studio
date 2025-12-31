@@ -15,7 +15,8 @@ function AuthCallbackContent() {
       
       if (code) {
         try {
-          // 使用 code 交换 session
+          // exchange code for session
+
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           
           if (error) {
@@ -24,14 +25,14 @@ function AuthCallbackContent() {
             return;
           }
 
-          // 成功登录，重定向到主页
+          // login success
           router.push('/');
         } catch (err) {
           console.error('Auth callback error:', err);
           router.push('/?error=auth_error');
         }
       } else {
-        // 没有 code 参数，直接重定向
+        // login fail
         router.push('/');
       }
     };

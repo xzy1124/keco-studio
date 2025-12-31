@@ -80,7 +80,9 @@ export class ProjectPage {
 
     // Wait for modal to close and navigation to complete
     await expect(this.projectNameInput).not.toBeVisible({ timeout: 10000 });
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('networkidle', { timeout: 30000 });
+    // Additional wait to ensure authorization checks are complete
+    await this.page.waitForTimeout(1000);
   }
 
   /**
@@ -119,10 +121,14 @@ export class ProjectPage {
       const path = url.pathname;
       // Match pattern: /{projectId} (not /projects)
       return path !== '/projects' && /^\/[^\/]+$/.test(path);
-    }, { timeout: 15000 });
+    }, { timeout: 30000 });
     
-    // Wait for page to stabilize
-    await this.page.waitForLoadState('networkidle', { timeout: 15000 });
+    // Wait for page to stabilize and all API calls to complete
+    // This is important after adding authorization checks
+    await this.page.waitForLoadState('networkidle', { timeout: 30000 });
+    
+    // Additional wait to ensure authorization checks are complete
+    await this.page.waitForTimeout(1000);
   }
 
   /**

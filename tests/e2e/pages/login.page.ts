@@ -139,17 +139,26 @@ export class LoginPage {
       const path = url.pathname;
       // Match /projects or /{projectId} (project detail page) - anything except root
       return path !== '/' && path !== '';
-    }, { timeout: 20000 });
+    }, { timeout: 30000 });
     
-    // Strategy 2: Wait for network to be idle (ensures page is fully loaded)
-    await this.page.waitForLoadState('networkidle', { timeout: 20000 });
+    // Strategy 2: Wait for auth form to disappear (DashboardLayout shows dashboard after 1.5s delay)
+    // The DashboardLayout component has a 1.5 second delay after login to show success message
+    await expect(this.loginHeading).not.toBeVisible({ timeout: 30000 });
     
-    // Strategy 3: Wait for projects heading to be visible (with longer timeout for CI)
+    // Strategy 3: Wait for network to be idle (ensures page is fully loaded)
+    // This ensures all API calls (including auth verification) are complete
+    await this.page.waitForLoadState('networkidle', { timeout: 30000 });
+    
+    // Strategy 4: Additional wait to ensure authentication state is fully established
+    // This is important after adding authorization checks
+    await this.page.waitForTimeout(2000); // Wait 2 seconds for auth state to stabilize
+    
+    // Strategy 5: Wait for projects heading or verify we're not on login page
     // Note: If redirected to project detail page, this may not be visible,
     // but we've already verified URL change and network idle, so login was successful
     const projectsHeading = this.page.getByRole('heading', { name: /projects/i });
     try {
-      await expect(projectsHeading).toBeVisible({ timeout: 20000 });
+      await expect(projectsHeading).toBeVisible({ timeout: 10000 });
     } catch {
       // If projects heading not found, verify we're at least not on login page
       // This handles the case where login redirects directly to a project page

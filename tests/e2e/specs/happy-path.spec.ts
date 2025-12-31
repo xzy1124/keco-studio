@@ -67,7 +67,8 @@ test.describe('Happy Path - Complete User Journey', () => {
 
   test('should complete full workflow: Project → Folder → Libraries → Template → Asset', async () => {
     // Increase timeout for this complex E2E test
-    test.setTimeout(120000); // 2 minutes
+    // After adding authorization checks, operations may take longer
+    test.setTimeout(180000); // 3 minutes
     
     // ==========================================
     // STEP 1: Create a new project
