@@ -284,7 +284,14 @@ export class LibraryPage {
     await predefineButton.click();
     
     // Wait for navigation to predefine page
-    await this.page.waitForURL(/\/predefine$/, { timeout: 10000 });
+    // Use flexible URL matching (removed $ anchor to allow trailing slash/query params)
+    // Increased timeout for CI environments where navigation may be slower
+    await this.page.waitForURL(/\/predefine/, { timeout: 15000 });
+    
+    // Verify page content as additional check (more reliable than URL matching)
+    const predefineHeading = this.page.getByRole('heading', { name: /predefine/i });
+    await expect(predefineHeading).toBeVisible({ timeout: 5000 });
+    
     await this.page.waitForLoadState('networkidle');
   }
 
