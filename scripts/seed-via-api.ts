@@ -29,6 +29,10 @@ interface TestUserWithData extends TestUser {
   projectDescription?: string;
   libraryName?: string;
   libraryDescription?: string;
+  // For happy-path user: create complete test data
+  createDirectFolder?: boolean;
+  createDirectLibrary?: boolean;
+  createBreedAsset?: boolean;
 }
 
 // Test users configuration
@@ -80,7 +84,7 @@ const TEST_USERS: TestUserWithData[] = [
     libraryName: 'Seed Library B1',
     libraryDescription: 'Empty library',
   },
-  // Happy path test user (for destructive tests)
+  // Happy path test user (for destructive tests) - with complete data
   {
     email: 'seed-happy-path@mailinator.com',
     password: 'Password123!',
@@ -90,6 +94,9 @@ const TEST_USERS: TestUserWithData[] = [
     projectDescription: 'End-to-end test project for livestock asset management',
     libraryName: 'Breed Library',
     libraryDescription: 'Reference library for livestock breeds',
+    createDirectFolder: true,
+    createDirectLibrary: true,
+    createBreedAsset: true,
   },
 ];
 
@@ -125,46 +132,72 @@ async function main() {
     try {
       console.log(`\n📧 Processing: ${user.email}`);
 
-      // Check if user already exists
-      const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
-      
-      if (listError) {
-        console.error(`  ❌ Error checking existing users: ${listError.message}`);
-        errorCount++;
-        continue;
-      }
-
-      const existingUser = existingUsers?.users?.find((u: any) => u.email === user.email);
-
       let userId: string;
+      let userExists = false;
 
-      if (existingUser) {
-        console.log(`  ⏭️  User already exists, skipping creation`);
-        userId = existingUser.id;
-        skipCount++;
-      } else {
-        // Create user via Admin API
-        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-          email: user.email,
-          password: user.password,
-          email_confirm: user.emailConfirm ?? true,
-          user_metadata: {
-            username: user.username,
-          },
-        });
+      // Try to create user directly (more reliable than listing all users)
+      const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+        email: user.email,
+        password: user.password,
+        email_confirm: user.emailConfirm ?? true,
+        user_metadata: {
+          username: user.username,
+        },
+      });
 
-        if (createError) {
+      if (createError) {
+        // Check if error is because user already exists
+        if (createError.message.includes('already been registered') || 
+            createError.message.includes('already exists')) {
+          console.log(`  ⏭️  User already exists, fetching user ID...`);
+          userExists = true;
+          
+          // Fetch user by email
+          const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
+          
+          if (listError) {
+            console.error(`    ⚠️  Could not fetch user ID: ${listError.message}`);
+            console.log(`    ℹ️  Skipping data creation for this user`);
+            skipCount++;
+            continue;
+          }
+
+          const existingUser = existingUsers?.users?.find((u: any) => u.email === user.email);
+          
+          if (!existingUser) {
+            console.error(`    ⚠️  User exists but could not find ID (pagination issue)`);
+            console.log(`    ℹ️  Skipping data creation for this user`);
+            skipCount++;
+            continue;
+          }
+          
+          userId = existingUser.id;
+          
+          // Update password to ensure it's correct
+          const { error: updateError } = await supabase.auth.admin.updateUserById(
+            userId,
+            { password: user.password }
+          );
+          
+          if (updateError) {
+            console.log(`    ⚠️  Could not update password: ${updateError.message}`);
+          } else {
+            console.log(`    ✅ Password verified/updated`);
+          }
+          
+          skipCount++;
+        } else {
+          // Real error, not just "already exists"
           console.error(`  ❌ Error creating user: ${createError.message}`);
           errorCount++;
           continue;
         }
-
-        if (!newUser.user) {
-          console.error(`  ❌ User creation failed: no user returned`);
-          errorCount++;
-          continue;
-        }
-
+      } else if (!newUser?.user) {
+        console.error(`  ❌ User creation failed: no user returned`);
+        errorCount++;
+        continue;
+      } else {
+        // User created successfully
         userId = newUser.user.id;
         console.log(`  ✅ User created successfully (ID: ${userId})`);
         successCount++;
@@ -184,11 +217,21 @@ async function main() {
         if (projectCheckError) {
           console.error(`    ⚠️  Error checking existing project: ${projectCheckError.message}`);
         } else if (existingProjects && existingProjects.length > 0) {
-          console.log(`    ⏭️  Project already exists, skipping`);
+          console.log(`    ⏭️  Project already exists, checking related data...`);
+          
+          const existingProjectId = existingProjects[0].id;
           
           // Create library if specified and project exists
-          if (user.libraryName && existingProjects[0].id) {
-            await createLibrary(supabase, existingProjects[0].id, user);
+          if (user.libraryName) {
+            await createLibrary(supabase, existingProjectId, user);
+          }
+          
+          // Create additional data for happy-path user
+          if (user.createDirectFolder) {
+            await createDirectFolder(supabase, existingProjectId);
+          }
+          if (user.createDirectLibrary) {
+            await createDirectLibrary(supabase, existingProjectId);
           }
         } else {
           // Create new project
@@ -210,6 +253,16 @@ async function main() {
             // Create library if specified
             if (user.libraryName && newProject?.id) {
               await createLibrary(supabase, newProject.id, user);
+            }
+
+            // Create additional data for happy-path user
+            if (newProject?.id) {
+              if (user.createDirectFolder) {
+                await createDirectFolder(supabase, newProject.id);
+              }
+              if (user.createDirectLibrary) {
+                await createDirectLibrary(supabase, newProject.id);
+              }
             }
           }
         }
@@ -254,22 +307,182 @@ async function createLibrary(
   }
 
   if (existingLibraries && existingLibraries.length > 0) {
-    console.log(`      ⏭️  Library already exists, skipping`);
+    console.log(`      ⏭️  Library already exists, checking for breed asset...`);
+    
+    // If this is Breed Library and createBreedAsset is true, create the asset
+    if (user.createBreedAsset && user.libraryName === 'Breed Library') {
+      await createBreedLibraryData(supabase, existingLibraries[0].id);
+    }
     return;
   }
 
-  const { error: libraryError } = await supabase
+  const { data: newLibrary, error: libraryError } = await supabase
     .from('libraries')
     .insert({
       project_id: projectId,
       name: user.libraryName,
       description: user.libraryDescription,
-    });
+    })
+    .select()
+    .single();
 
   if (libraryError) {
     console.error(`      ⚠️  Error creating library: ${libraryError.message}`);
   } else {
     console.log(`      ✅ Library created successfully`);
+    
+    // If this is Breed Library and createBreedAsset is true, create field defs and asset
+    if (user.createBreedAsset && user.libraryName === 'Breed Library' && newLibrary?.id) {
+      await createBreedLibraryData(supabase, newLibrary.id);
+    }
+  }
+}
+
+async function createBreedLibraryData(supabase: any, libraryId: string) {
+  console.log(`      🧬 Creating breed library field definitions and asset...`);
+  
+  // Create field definitions: name and Origin
+  const { data: fieldDefs, error: fieldDefError } = await supabase
+    .from('library_field_definitions')
+    .insert([
+      {
+        library_id: libraryId,
+        label: 'name',
+        data_type: 'string',
+        section: 'Basic Information',
+        order_index: 0,
+        required: true,
+      },
+      {
+        library_id: libraryId,
+        label: 'Origin',
+        data_type: 'string',
+        section: 'Basic Information',
+        order_index: 1,
+        required: false,
+      },
+    ])
+    .select();
+
+  if (fieldDefError) {
+    console.error(`        ⚠️  Error creating field definitions: ${fieldDefError.message}`);
+    return;
+  }
+
+  console.log(`        ✅ Field definitions created`);
+
+  // Create breed asset: Black Goat Breed
+  const { data: asset, error: assetError } = await supabase
+    .from('library_assets')
+    .insert({
+      library_id: libraryId,
+      name: 'Black Goat Breed',
+    })
+    .select()
+    .single();
+
+  if (assetError) {
+    console.error(`        ⚠️  Error creating breed asset: ${assetError.message}`);
+    return;
+  }
+
+  console.log(`        ✅ Breed asset created`);
+
+  // Create asset values
+  if (fieldDefs && fieldDefs.length === 2 && asset?.id) {
+    const nameField = fieldDefs.find((f: any) => f.label === 'name');
+    const originField = fieldDefs.find((f: any) => f.label === 'Origin');
+
+    const { error: valuesError } = await supabase
+      .from('library_asset_values')
+      .insert([
+        {
+          asset_id: asset.id,
+          field_id: nameField.id,
+          value_json: 'Black Goat Breed',
+        },
+        {
+          asset_id: asset.id,
+          field_id: originField.id,
+          value_json: 'African Highlands',
+        },
+      ]);
+
+    if (valuesError) {
+      console.error(`        ⚠️  Error creating asset values: ${valuesError.message}`);
+    } else {
+      console.log(`        ✅ Asset values created`);
+    }
+  }
+}
+
+async function createDirectFolder(supabase: any, projectId: string) {
+  console.log(`    📁 Creating Direct Folder...`);
+
+  // Check if folder already exists
+  const { data: existing, error: checkError } = await supabase
+    .from('folders')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('name', 'Direct Folder');
+
+  if (checkError) {
+    console.error(`      ⚠️  Error checking existing folder: ${checkError.message}`);
+    return;
+  }
+
+  if (existing && existing.length > 0) {
+    console.log(`      ⏭️  Direct Folder already exists, skipping`);
+    return;
+  }
+
+  const { error } = await supabase
+    .from('folders')
+    .insert({
+      project_id: projectId,
+      name: 'Direct Folder',
+      description: 'Folder created directly under project',
+    });
+
+  if (error) {
+    console.error(`      ⚠️  Error creating folder: ${error.message}`);
+  } else {
+    console.log(`      ✅ Direct Folder created`);
+  }
+}
+
+async function createDirectLibrary(supabase: any, projectId: string) {
+  console.log(`    📚 Creating Direct Library...`);
+
+  // Check if library already exists
+  const { data: existing, error: checkError } = await supabase
+    .from('libraries')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('name', 'Direct Library');
+
+  if (checkError) {
+    console.error(`      ⚠️  Error checking existing library: ${checkError.message}`);
+    return;
+  }
+
+  if (existing && existing.length > 0) {
+    console.log(`      ⏭️  Direct Library already exists, skipping`);
+    return;
+  }
+
+  const { error } = await supabase
+    .from('libraries')
+    .insert({
+      project_id: projectId,
+      name: 'Direct Library',
+      description: 'Library created directly under project',
+    });
+
+  if (error) {
+    console.error(`      ⚠️  Error creating library: ${error.message}`);
+  } else {
+    console.log(`      ✅ Direct Library created`);
   }
 }
 
