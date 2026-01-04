@@ -86,9 +86,9 @@ const TEST_USERS: TestUserWithData[] = [
   },
   // Happy path test user (for destructive tests) - with complete data
     {
-      email: 'seed-happy-path-remote@mailinator.com',
+      email: 'seed-happy-path@mailinator.com',
       password: 'Password123!',
-      username: 'seed-happy-path-remote',
+      username: 'seed-happy-path',
     emailConfirm: true,
     projectName: 'Livestock Management Project',
     projectDescription: 'End-to-end test project for livestock asset management',
