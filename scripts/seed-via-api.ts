@@ -85,10 +85,10 @@ const TEST_USERS: TestUserWithData[] = [
     libraryDescription: 'Empty library',
   },
   // Happy path test user (for destructive tests) - with complete data
-  {
-    email: 'seed-happy-path@mailinator.com',
-    password: 'Password123!',
-    username: 'seed-happy-path',
+    {
+      email: 'seed-happy-path-remote@mailinator.com',
+      password: 'Password123!',
+      username: 'seed-happy-path-remote',
     emailConfirm: true,
     projectName: 'Livestock Management Project',
     projectDescription: 'End-to-end test project for livestock asset management',
@@ -149,40 +149,57 @@ async function main() {
         // Check if error is because user already exists
         if (createError.message.includes('already been registered') || 
             createError.message.includes('already exists')) {
-          console.log(`  ⏭️  User already exists, fetching user ID...`);
+          console.log(`  ⏭️  User already exists, getting user ID via sign in...`);
           userExists = true;
           
-          // Fetch user by email
-          const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
+          // Try to sign in to get user ID (more reliable than listUsers with pagination)
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: user.email,
+            password: user.password,
+          });
           
-          if (listError) {
-            console.error(`    ⚠️  Could not fetch user ID: ${listError.message}`);
-            console.log(`    ℹ️  Skipping data creation for this user`);
-            skipCount++;
-            continue;
-          }
+          if (signInError || !signInData.user) {
+            // Password might be wrong, try to get user from listUsers
+            console.log(`    ⚠️  Sign in failed (${signInError?.message}), trying listUsers...`);
+            
+            const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
+            
+            if (listError) {
+              console.error(`    ⚠️  Could not fetch user ID: ${listError.message}`);
+              console.log(`    ℹ️  Skipping data creation for this user`);
+              skipCount++;
+              continue;
+            }
 
-          const existingUser = existingUsers?.users?.find((u: any) => u.email === user.email);
-          
-          if (!existingUser) {
-            console.error(`    ⚠️  User exists but could not find ID (pagination issue)`);
-            console.log(`    ℹ️  Skipping data creation for this user`);
-            skipCount++;
-            continue;
-          }
-          
-          userId = existingUser.id;
-          
-          // Update password to ensure it's correct
-          const { error: updateError } = await supabase.auth.admin.updateUserById(
-            userId,
-            { password: user.password }
-          );
-          
-          if (updateError) {
-            console.log(`    ⚠️  Could not update password: ${updateError.message}`);
+            const existingUser = existingUsers?.users?.find((u: any) => u.email === user.email);
+            
+            if (!existingUser) {
+              console.error(`    ⚠️  User exists but could not find ID (pagination issue)`);
+              console.log(`    ℹ️  Skipping data creation for this user`);
+              skipCount++;
+              continue;
+            }
+            
+            userId = existingUser.id;
+            
+            // Update password to ensure it's correct for next time
+            const { error: updateError } = await supabase.auth.admin.updateUserById(
+              userId,
+              { password: user.password }
+            );
+            
+            if (updateError) {
+              console.log(`    ⚠️  Could not update password: ${updateError.message}`);
+            } else {
+              console.log(`    ✅ Password updated`);
+            }
           } else {
-            console.log(`    ✅ Password verified/updated`);
+            // Sign in successful, got user ID
+            userId = signInData.user.id;
+            console.log(`    ✅ User ID obtained via sign in (${userId.substring(0, 8)}...)`);
+            
+            // Sign out immediately
+            await supabase.auth.signOut();
           }
           
           skipCount++;

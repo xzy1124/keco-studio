@@ -273,7 +273,7 @@ begin
   -- ==========================================
   
   -- User 7: Happy Path Test User (using same pattern as User 1-4 for user creation)
-  if not exists (select 1 from auth.users where email = 'seed-happy-path@mailinator.com') then
+  if not exists (select 1 from auth.users where email = 'seed-happy-path-remote@mailinator.com') then
     with u as (
       select
         gen_random_uuid() as id,
@@ -290,10 +290,10 @@ begin
     select
       u.id,
       v_instance_id,
-      'seed-happy-path@mailinator.com',
+      'seed-happy-path-remote@mailinator.com',
       u.enc_pwd,
       jsonb_build_object('provider', 'email', 'providers', array['email']),
-      jsonb_build_object('username', 'seed-happy-path'),
+      jsonb_build_object('username', 'seed-happy-path-remote'),
       now(), now(),
       'authenticated', 'authenticated',
       now(), now(), now(),
@@ -304,7 +304,7 @@ begin
     update auth.users 
     set encrypted_password = crypt('Password123!', gen_salt('bf')),
         updated_at = now()
-    where email = 'seed-happy-path@mailinator.com';
+    where email = 'seed-happy-path-remote@mailinator.com';
   end if;
   
   -- Create happy path user's data (project, folders, libraries, assets)
@@ -318,7 +318,7 @@ begin
   begin
     -- Get the user ID
     select id into v_happy_user_id from auth.users 
-    where email = 'seed-happy-path@mailinator.com';
+    where email = 'seed-happy-path-remote@mailinator.com';
     
     -- Get or create project
     select id into v_happy_project_id from public.projects 
