@@ -356,79 +356,140 @@ async function createLibrary(
 }
 
 async function createBreedLibraryData(supabase: any, libraryId: string) {
-  console.log(`      🧬 Creating breed library field definitions and asset...`);
+  console.log(`      🧬 Checking breed library field definitions and asset...`);
   
-  // Create field definitions: name and Origin
-  const { data: fieldDefs, error: fieldDefError } = await supabase
+  // Check if field definitions already exist
+  let fieldDefs: any[] = [];
+  const { data: existingFieldDefs, error: fieldCheckError } = await supabase
     .from('library_field_definitions')
-    .insert([
-      {
-        library_id: libraryId,
-        label: 'name',
-        data_type: 'string',
-        section: 'Basic Information',
-        order_index: 0,
-        required: true,
-      },
-      {
-        library_id: libraryId,
-        label: 'Origin',
-        data_type: 'string',
-        section: 'Basic Information',
-        order_index: 1,
-        required: false,
-      },
-    ])
-    .select();
+    .select('*')
+    .eq('library_id', libraryId)
+    .in('label', ['name', 'Origin']);
 
-  if (fieldDefError) {
-    console.error(`        ⚠️  Error creating field definitions: ${fieldDefError.message}`);
+  if (fieldCheckError) {
+    console.error(`        ⚠️  Error checking field definitions: ${fieldCheckError.message}`);
     return;
   }
 
-  console.log(`        ✅ Field definitions created`);
+  if (existingFieldDefs && existingFieldDefs.length === 2) {
+    console.log(`        ⏭️  Field definitions already exist (${existingFieldDefs.length} fields)`);
+    fieldDefs = existingFieldDefs;
+  } else {
+    // Create field definitions: name and Origin
+    const { data: newFieldDefs, error: fieldDefError } = await supabase
+      .from('library_field_definitions')
+      .insert([
+        {
+          library_id: libraryId,
+          label: 'name',
+          data_type: 'string',
+          section: 'Basic Information',
+          order_index: 0,
+          required: true,
+        },
+        {
+          library_id: libraryId,
+          label: 'Origin',
+          data_type: 'string',
+          section: 'Basic Information',
+          order_index: 1,
+          required: false,
+        },
+      ])
+      .select();
 
-  // Create breed asset: Black Goat Breed
-  const { data: asset, error: assetError } = await supabase
+    if (fieldDefError) {
+      console.error(`        ⚠️  Error creating field definitions: ${fieldDefError.message}`);
+      return;
+    }
+
+    console.log(`        ✅ Field definitions created`);
+    fieldDefs = newFieldDefs || [];
+  }
+
+  // Check if breed asset already exists
+  let asset: any = null;
+  const { data: existingAsset, error: assetCheckError } = await supabase
     .from('library_assets')
-    .insert({
-      library_id: libraryId,
-      name: 'Black Goat Breed',
-    })
-    .select()
-    .single();
+    .select('*')
+    .eq('library_id', libraryId)
+    .eq('name', 'Black Goat Breed')
+    .maybeSingle();
 
-  if (assetError) {
-    console.error(`        ⚠️  Error creating breed asset: ${assetError.message}`);
+  if (assetCheckError) {
+    console.error(`        ⚠️  Error checking breed asset: ${assetCheckError.message}`);
     return;
   }
 
-  console.log(`        ✅ Breed asset created`);
+  if (existingAsset) {
+    console.log(`        ⏭️  Breed asset "Black Goat Breed" already exists`);
+    asset = existingAsset;
+  } else {
+    // Create breed asset: Black Goat Breed
+    console.log(`        🐐 Creating breed asset "Black Goat Breed"...`);
+    const { data: newAsset, error: assetError } = await supabase
+      .from('library_assets')
+      .insert({
+        library_id: libraryId,
+        name: 'Black Goat Breed',
+      })
+      .select()
+      .single();
 
-  // Create asset values
+    if (assetError) {
+      console.error(`        ⚠️  Error creating breed asset: ${assetError.message}`);
+      return;
+    }
+
+    console.log(`        ✅ Breed asset created`);
+    asset = newAsset;
+  }
+
+  // Check and create asset values
   if (fieldDefs && fieldDefs.length === 2 && asset?.id) {
     const nameField = fieldDefs.find((f: any) => f.label === 'name');
     const originField = fieldDefs.find((f: any) => f.label === 'Origin');
 
-    const { error: valuesError } = await supabase
-      .from('library_asset_values')
-      .insert([
-        {
-          asset_id: asset.id,
-          field_id: nameField.id,
-          value_json: 'Black Goat Breed',
-        },
-        {
-          asset_id: asset.id,
-          field_id: originField.id,
-          value_json: 'African Highlands',
-        },
-      ]);
+    if (!nameField || !originField) {
+      console.error(`        ⚠️  Could not find required field definitions`);
+      return;
+    }
 
-    if (valuesError) {
-      console.error(`        ⚠️  Error creating asset values: ${valuesError.message}`);
+    // Check if asset values already exist
+    const { data: existingValues, error: valuesCheckError } = await supabase
+      .from('library_asset_values')
+      .select('field_id')
+      .eq('asset_id', asset.id);
+
+    if (valuesCheckError) {
+      console.error(`        ⚠️  Error checking asset values: ${valuesCheckError.message}`);
+      return;
+    }
+
+    if (existingValues && existingValues.length > 0) {
+      console.log(`        ⏭️  Asset values already exist (${existingValues.length} values)`);
     } else {
-      console.log(`        ✅ Asset values created`);
+      // Create asset values
+      const { error: valuesError } = await supabase
+        .from('library_asset_values')
+        .insert([
+          {
+            asset_id: asset.id,
+            field_id: nameField.id,
+            value_json: 'Black Goat Breed',
+          },
+          {
+            asset_id: asset.id,
+            field_id: originField.id,
+            value_json: 'African Highlands',
+          },
+        ]);
+
+      if (valuesError) {
+        console.error(`        ⚠️  Error creating asset values: ${valuesError.message}`);
+      } else {
+        console.log(`        ✅ Asset values created`);
+      }
     }
   }
 }

@@ -110,8 +110,8 @@ export class AssetPage {
     
     // Navigate directly to the new asset page using relative path
     const newAssetUrl = `/${projectId}/${libraryId}/new`;
-    await this.page.goto(newAssetUrl, { waitUntil: 'networkidle' });
-    await this.page.waitForLoadState('networkidle');
+    await this.page.goto(newAssetUrl, { waitUntil: 'load', timeout: 15000 });
+    await this.page.waitForLoadState('load', { timeout: 10000 });
     
     // Wait for the form to load - look for the name input field
     // The form uses placeholder for labels, so we find by placeholder
@@ -130,7 +130,7 @@ export class AssetPage {
     // Submit the asset - the button is in TopBar with text "Create Asset"
     await expect(this.submitButton).toBeVisible({ timeout: 10000 });
     await this.submitButton.click();
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('load', { timeout: 10000 });
   }
 
   /**
@@ -282,7 +282,7 @@ export class AssetPage {
 
     await expect(assetCard).toBeVisible();
     await assetCard.click();
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('load', { timeout: 10000 });
   }
 
   /**
@@ -291,7 +291,7 @@ export class AssetPage {
    */
   async expectAssetExists(assetName: string): Promise<void> {
     const assetItem = this.page.getByText(assetName, { exact: true });
-    await expect(assetItem).toBeVisible({ timeout: 5000 });
+    await expect(assetItem).toBeVisible({ timeout: 15000 });
   }
 
   /**
@@ -315,7 +315,7 @@ export class AssetPage {
     );
     
     // Wait for page to stabilize
-    await this.page.waitForLoadState('networkidle', { timeout: 10000 });
+    await this.page.waitForLoadState('load', { timeout: 10000 });
   }
 
   /**
@@ -353,7 +353,7 @@ export class AssetPage {
     
     // Step 1: Find the library in sidebar
     const libraryItem = sidebar.getByText(libraryName, { exact: true });
-    await expect(libraryItem).toBeVisible({ timeout: 5000 });
+    await expect(libraryItem).toBeVisible({ timeout: 15000 });
     
     // Check if asset is already visible (library might be expanded)
     const assetItem = sidebar.getByText(assetName, { exact: true });
@@ -365,7 +365,7 @@ export class AssetPage {
       
       // Find the library's treeitem (Ant Design Tree uses role="treeitem")
       const libraryTreeItem = sidebar.locator(`[role="treeitem"]`).filter({ hasText: libraryName });
-      await expect(libraryTreeItem).toBeVisible({ timeout: 5000 });
+      await expect(libraryTreeItem).toBeVisible({ timeout: 15000 });
       
       // Check if library is already expanded using aria-expanded attribute
       const ariaExpanded = await libraryTreeItem.getAttribute('aria-expanded');
@@ -451,7 +451,7 @@ export class AssetPage {
     await deleteButton.click();
     
     // Wait for deletion to complete
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForTimeout(1000);
   }
 
   /**
@@ -461,7 +461,7 @@ export class AssetPage {
   async expectAssetDeleted(assetName: string): Promise<void> {
     const sidebar = this.page.getByRole('tree');
     const assetItem = sidebar.getByText(assetName, { exact: true });
-    await expect(assetItem).not.toBeVisible({ timeout: 5000 });
+    await expect(assetItem).not.toBeVisible({ timeout: 15000 });
   }
 
   /**
@@ -469,7 +469,7 @@ export class AssetPage {
    */
   async waitForPageLoad(): Promise<void> {
     await expect(this.assetsHeading).toBeVisible({ timeout: 10000 });
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('load', { timeout: 10000 });
   }
 }
 

@@ -59,6 +59,10 @@ test.describe('Destructive Tests - Delete Operations', () => {
     // await loginPage.login(users.seedHappyPath);
     await loginPage.expectLoginSuccess();
 
+    // Navigate to projects page first to ensure we're on the right page
+    await projectPage.goto();
+    await projectPage.waitForPageLoad();
+
     // Navigate to the test project (pre-seeded, matches happy-path output)
     await projectPage.openProject(projects.happyPath.name);
     await libraryPage.waitForPageLoad();
@@ -186,7 +190,8 @@ test.describe('Destructive Tests - Delete Operations', () => {
     await test.step('Delete project', async () => {
       // After deleting all libraries and folders, we should still be in the project page
       // Wait for page to stabilize before attempting deletion
-      await libraryPage.page.waitForLoadState('networkidle');
+      await libraryPage.page.waitForLoadState('load', { timeout: 10000 });
+      await libraryPage.page.waitForTimeout(1000);
       
       // Wait for the Projects section in sidebar to be visible
       // This ensures the sidebar has fully rendered and projects list is loaded
