@@ -20,11 +20,11 @@ import { users } from '../fixures/users';
  * 4. Project deletion
  * 
  * Prerequisites:
- * - The happy-path.spec.ts test must run first to create test data
- * - Uses the same user account (seedEmpty3) that was used in happy-path
- * - Data created by happy-path includes:
+ * - Uses pre-seeded account (seedHappyPath) that matches happy-path.spec.ts output
+ * - No need to run happy-path.spec.ts first - data is pre-populated in database
+ * - Pre-seeded data includes:
  *   - Project: "Livestock Management Project"
- *   - Breed Library (with predefined template and asset)
+ *   - Breed Library (with predefined template and asset "Black Goat Breed")
  *   - Direct Library (created directly under project)
  *   - Direct Folder (created directly under project)
  * 
@@ -51,13 +51,19 @@ test.describe('Destructive Tests - Delete Operations', () => {
     libraryPage = new LibraryPage(page);
     assetPage = new AssetPage(page);
 
-    // Authenticate user (same user from happy-path tests)
+    // Authenticate user with pre-seeded data matching happy-path test output
+    // This account has the same data structure as what happy-path.spec.ts creates
     const loginPage = new LoginPage(page);
     await loginPage.goto();
-    await loginPage.login(users.seedEmpty);
+    await loginPage.login(users.seedHappyPathRemote);
+    // await loginPage.login(users.seedHappyPath);
     await loginPage.expectLoginSuccess();
 
-    // Navigate to the test project created by happy-path
+    // Navigate to projects page first to ensure we're on the right page
+    await projectPage.goto();
+    await projectPage.waitForPageLoad();
+
+    // Navigate to the test project (pre-seeded, matches happy-path output)
     await projectPage.openProject(projects.happyPath.name);
     await libraryPage.waitForPageLoad();
   });
@@ -184,7 +190,8 @@ test.describe('Destructive Tests - Delete Operations', () => {
     await test.step('Delete project', async () => {
       // After deleting all libraries and folders, we should still be in the project page
       // Wait for page to stabilize before attempting deletion
-      await libraryPage.page.waitForLoadState('networkidle');
+      await libraryPage.page.waitForLoadState('load', { timeout: 10000 });
+      await libraryPage.page.waitForTimeout(1000);
       
       // Wait for the Projects section in sidebar to be visible
       // This ensures the sidebar has fully rendered and projects list is loaded

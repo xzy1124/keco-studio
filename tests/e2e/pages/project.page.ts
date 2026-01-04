@@ -103,12 +103,12 @@ export class ProjectPage {
     // Wait for modal to close and navigation to complete
     await expect(this.projectNameInput).not.toBeVisible({ timeout: 10000 });
     
-    // Wait for network to be idle and all API calls to complete
-    await this.page.waitForLoadState('networkidle', { timeout: 30000 });
+    // Wait for page to load
+    await this.page.waitForLoadState('load', { timeout: 15000 });
     
     // Additional wait to ensure authorization checks are complete
     // In CI environments, Supabase auth state may take longer to stabilize
-    await this.page.waitForTimeout(3000);
+    await this.page.waitForTimeout(2000);
   }
 
   /**
@@ -133,11 +133,12 @@ export class ProjectPage {
         .or(this.page.getByText(projectName).first());
     }
 
-    await expect(projectCard).toBeVisible();
+    // Increased timeout for remote/CI environments
+    await expect(projectCard).toBeVisible({ timeout: 15000 });
     await projectCard.click();
 
     // Wait for navigation to project detail page
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('load', { timeout: 15000 });
   }
 
   /**
@@ -165,7 +166,7 @@ export class ProjectPage {
     
     // Wait for page to stabilize and all API calls to complete
     // This is important after adding authorization checks
-    await this.page.waitForLoadState('networkidle', { timeout: 30000 });
+    await this.page.waitForLoadState('load', { timeout: 15000 });
     
     // Additional wait to ensure authorization checks are complete
     // In CI environments, Supabase auth state may take longer to stabilize
@@ -216,7 +217,7 @@ export class ProjectPage {
     }
     
     // Wait for project to be visible
-    await expect(projectItem).toBeVisible({ timeout: 5000 });
+    await expect(projectItem).toBeVisible({ timeout: 15000 });
     
     // Right-click on the project to open context menu
     await projectItem.click({ button: 'right' });
@@ -237,7 +238,7 @@ export class ProjectPage {
     await deleteButton.click();
     
     // Wait for deletion to complete
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForTimeout(1000);
   }
 
   /**
@@ -249,11 +250,11 @@ export class ProjectPage {
     
     // Check by title attribute (more reliable for truncated names)
     const projectByTitle = sidebar.locator(`[title="${projectName}"]`);
-    await expect(projectByTitle).not.toBeVisible({ timeout: 5000 });
+    await expect(projectByTitle).not.toBeVisible({ timeout: 15000 });
     
     // Also check by partial text match as a backup
     const projectByText = sidebar.getByText(projectName);
-    await expect(projectByText).not.toBeVisible({ timeout: 5000 });
+    await expect(projectByText).not.toBeVisible({ timeout: 15000 });
   }
 
   /**
@@ -261,7 +262,7 @@ export class ProjectPage {
    */
   async waitForPageLoad(): Promise<void> {
     await expect(this.projectsHeading).toBeVisible();
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('load', { timeout: 10000 });
   }
 }
 

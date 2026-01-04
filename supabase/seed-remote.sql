@@ -46,6 +46,12 @@ begin
       now(), now(), now(),
       '', '', '', '', '', ''
     from u;
+  else
+    -- User exists, ensure password is correct
+    update auth.users 
+    set encrypted_password = crypt('Password123!', gen_salt('bf')),
+        updated_at = now()
+    where email = 'seed-empty@mailinator.com';
   end if;
 
   -- User 2: empty account (for parallel testing)
@@ -75,6 +81,12 @@ begin
       now(), now(), now(),
       '', '', '', '', '', ''
     from u;
+  else
+    -- User exists, ensure password is correct
+    update auth.users 
+    set encrypted_password = crypt('Password123!', gen_salt('bf')),
+        updated_at = now()
+    where email = 'seed-empty-2@mailinator.com';
   end if;
 
   -- User 3: empty account (for parallel testing)
@@ -104,6 +116,12 @@ begin
       now(), now(), now(),
       '', '', '', '', '', ''
     from u;
+  else
+    -- User exists, ensure password is correct
+    update auth.users 
+    set encrypted_password = crypt('Password123!', gen_salt('bf')),
+        updated_at = now()
+    where email = 'seed-empty-3@mailinator.com';
   end if;
 
   -- User 4: empty account (for parallel testing)
@@ -133,6 +151,12 @@ begin
       now(), now(), now(),
       '', '', '', '', '', ''
     from u;
+  else
+    -- User exists, ensure password is correct
+    update auth.users 
+    set encrypted_password = crypt('Password123!', gen_salt('bf')),
+        updated_at = now()
+    where email = 'seed-empty-4@mailinator.com';
   end if;
 
   -- User 5: has one empty project
@@ -164,6 +188,12 @@ begin
         '', '', '', '', '', ''
       )
       returning id into v_user5_id;
+    else
+      -- User exists, ensure password is correct
+      update auth.users 
+      set encrypted_password = crypt('Password123!', gen_salt('bf')),
+          updated_at = now()
+      where id = v_user5_id;
     end if;
     
     -- Create project if it doesn't exist
@@ -207,6 +237,12 @@ begin
         '', '', '', '', '', ''
       )
       returning id into v_user6_id;
+    else
+      -- User exists, ensure password is correct
+      update auth.users 
+      set encrypted_password = crypt('Password123!', gen_salt('bf')),
+          updated_at = now()
+      where id = v_user6_id;
     end if;
     
     -- Get or create project
@@ -231,195 +267,135 @@ begin
   end;
 
   -- ==========================================
-  -- Destructive Test Users
-  -- These accounts have pre-populated data for deletion testing
+  -- Happy Path Test User
+  -- This account has pre-populated data matching what happy-path.spec.ts creates
+  -- Used by destructive.spec.ts for deletion testing
   -- ==========================================
   
-  -- Destructive Test User 1
+  -- User 7: Happy Path Test User (Remote version for CI/GitHub Actions)
+  if not exists (select 1 from auth.users where email = 'seed-happy-path-remote@mailinator.com') then
+    with u as (
+      select
+        gen_random_uuid() as id,
+        crypt('Password123!', gen_salt('bf')) as enc_pwd
+    )
+    insert into auth.users (
+      id, instance_id, email, encrypted_password,
+      raw_app_meta_data, raw_user_meta_data,
+      created_at, updated_at, aud, role,
+      email_confirmed_at, confirmation_sent_at, last_sign_in_at,
+      confirmation_token, recovery_token, email_change_token_new,
+      email_change_token_current, email_change, reauthentication_token
+    )
+    select
+      u.id,
+      v_instance_id,
+      'seed-happy-path-remote@mailinator.com',
+      u.enc_pwd,
+      jsonb_build_object('provider', 'email', 'providers', array['email']),
+      jsonb_build_object('username', 'seed-happy-path-remote'),
+      now(), now(),
+      'authenticated', 'authenticated',
+      now(), now(), now(),
+      '', '', '', '', '', ''
+    from u;
+  else
+    -- User exists, ensure password is correct
+    update auth.users 
+    set encrypted_password = crypt('Password123!', gen_salt('bf')),
+        updated_at = now()
+    where email = 'seed-happy-path-remote@mailinator.com';
+  end if;
+  
+  -- Create happy path user's data (project, folders, libraries, assets)
   declare
-    v_destruct_user1_id uuid;
-    v_destruct_project1_id uuid;
-    v_destruct_folder1_id uuid;
-    v_destruct_library1_id uuid;
-    v_destruct_library_root1_id uuid;
-    v_destruct_asset1_id uuid;
+    v_happy_user_id uuid;
+    v_happy_project_id uuid;
+    v_happy_breed_library_id uuid;
+    v_happy_breed_name_field_id uuid;
+    v_happy_breed_origin_field_id uuid;
+    v_happy_breed_asset_id uuid;
   begin
-    -- Get or create user
-    select id into v_destruct_user1_id from auth.users 
-    where email = 'seed-destruct-1@mailinator.com';
-    
-    if v_destruct_user1_id is null then
-      insert into auth.users (
-        instance_id, email, encrypted_password,
-        raw_app_meta_data, raw_user_meta_data,
-        created_at, updated_at, aud, role,
-        email_confirmed_at, confirmation_sent_at, last_sign_in_at,
-        confirmation_token, recovery_token, email_change_token_new,
-        email_change_token_current, email_change, reauthentication_token
-      )
-      values (
-        '00000000-0000-0000-0000-000000000000',
-        'seed-destruct-1@mailinator.com',
-        crypt('Password123!', gen_salt('bf')),
-        jsonb_build_object('provider', 'email', 'providers', array['email']),
-        jsonb_build_object('username', 'seed-destruct-1'),
-        now(), now(),
-        'authenticated', 'authenticated',
-        now(), now(), now(),
-        '', '', '', '', '', ''
-      )
-      returning id into v_destruct_user1_id;
-    end if;
+    -- Get the user ID
+    select id into v_happy_user_id from auth.users 
+    where email = 'seed-happy-path-remote@mailinator.com';
     
     -- Get or create project
-    select id into v_destruct_project1_id from public.projects 
-    where owner_id = v_destruct_user1_id and name = 'Destruct Test Project 1';
+    select id into v_happy_project_id from public.projects 
+    where owner_id = v_happy_user_id and name = 'Livestock Management Project';
     
-    if v_destruct_project1_id is null then
+    if v_happy_project_id is null then
       insert into public.projects (owner_id, name, description)
-      values (v_destruct_user1_id, 'Destruct Test Project 1', 'Project for deletion testing')
-      returning id into v_destruct_project1_id;
+      values (v_happy_user_id, 'Livestock Management Project', 'End-to-end test project for livestock asset management')
+      returning id into v_happy_project_id;
     end if;
     
-    -- Get or create folder
-    select id into v_destruct_folder1_id from public.folders
-    where project_id = v_destruct_project1_id and name = 'Test Folder 1';
-    
-    if v_destruct_folder1_id is null then
-      insert into public.folders (project_id, name, description)
-      values (v_destruct_project1_id, 'Test Folder 1', 'Folder for deletion testing')
-      returning id into v_destruct_folder1_id;
-    end if;
-    
-    -- Get or create library in folder
-    select id into v_destruct_library1_id from public.libraries
-    where project_id = v_destruct_project1_id and name = 'Test Library 1';
-    
-    if v_destruct_library1_id is null then
-      insert into public.libraries (project_id, folder_id, name, description)
-      values (v_destruct_project1_id, v_destruct_folder1_id, 'Test Library 1', 'Library for deletion testing')
-      returning id into v_destruct_library1_id;
-      
-      -- Add field definitions
-      insert into public.library_field_definitions (library_id, label, data_type, section, order_index, required)
-      values 
-        (v_destruct_library1_id, 'Name', 'string', 'General', 0, true),
-        (v_destruct_library1_id, 'Type', 'string', 'General', 1, true),
-        (v_destruct_library1_id, 'Description', 'string', 'General', 2, false);
-    end if;
-    
-    -- Get or create root library
-    select id into v_destruct_library_root1_id from public.libraries
-    where project_id = v_destruct_project1_id and name = 'Root Library 1';
-    
-    if v_destruct_library_root1_id is null then
-      insert into public.libraries (project_id, name, description)
-      values (v_destruct_project1_id, 'Root Library 1', 'Root-level library for deletion testing')
-      returning id into v_destruct_library_root1_id;
-    end if;
-    
-    -- Create asset if it doesn't exist
+    -- Create direct folder if it doesn't exist
     if not exists (
-      select 1 from public.library_assets 
-      where library_id = v_destruct_library1_id 
-      and name = 'Test Asset 1'
+      select 1 from public.folders 
+      where project_id = v_happy_project_id 
+      and name = 'Direct Folder'
     ) then
-      insert into public.library_assets (library_id, name)
-      values (v_destruct_library1_id, 'Test Asset 1');
-    end if;
-  end;
-
-  -- Destructive Test User 2
-  declare
-    v_destruct_user2_id uuid;
-    v_destruct_project2_id uuid;
-    v_destruct_folder2_id uuid;
-    v_destruct_library2_id uuid;
-    v_destruct_library_root2_id uuid;
-    v_destruct_asset2_id uuid;
-  begin
-    -- Get or create user
-    select id into v_destruct_user2_id from auth.users 
-    where email = 'seed-destruct-2@mailinator.com';
-    
-    if v_destruct_user2_id is null then
-      insert into auth.users (
-        instance_id, email, encrypted_password,
-        raw_app_meta_data, raw_user_meta_data,
-        created_at, updated_at, aud, role,
-        email_confirmed_at, confirmation_sent_at, last_sign_in_at,
-        confirmation_token, recovery_token, email_change_token_new,
-        email_change_token_current, email_change, reauthentication_token
-      )
-      values (
-        '00000000-0000-0000-0000-000000000000',
-        'seed-destruct-2@mailinator.com',
-        crypt('Password123!', gen_salt('bf')),
-        jsonb_build_object('provider', 'email', 'providers', array['email']),
-        jsonb_build_object('username', 'seed-destruct-2'),
-        now(), now(),
-        'authenticated', 'authenticated',
-        now(), now(), now(),
-        '', '', '', '', '', ''
-      )
-      returning id into v_destruct_user2_id;
-    end if;
-    
-    -- Get or create project
-    select id into v_destruct_project2_id from public.projects 
-    where owner_id = v_destruct_user2_id and name = 'Destruct Test Project 2';
-    
-    if v_destruct_project2_id is null then
-      insert into public.projects (owner_id, name, description)
-      values (v_destruct_user2_id, 'Destruct Test Project 2', 'Project for deletion testing')
-      returning id into v_destruct_project2_id;
-    end if;
-    
-    -- Get or create folder
-    select id into v_destruct_folder2_id from public.folders
-    where project_id = v_destruct_project2_id and name = 'Test Folder 2';
-    
-    if v_destruct_folder2_id is null then
       insert into public.folders (project_id, name, description)
-      values (v_destruct_project2_id, 'Test Folder 2', 'Folder for deletion testing')
-      returning id into v_destruct_folder2_id;
+      values (v_happy_project_id, 'Direct Folder', 'Folder created directly under project');
     end if;
     
-    -- Get or create library in folder
-    select id into v_destruct_library2_id from public.libraries
-    where project_id = v_destruct_project2_id and name = 'Test Library 2';
+    -- Get or create breed library
+    select id into v_happy_breed_library_id from public.libraries
+    where project_id = v_happy_project_id and name = 'Breed Library';
     
-    if v_destruct_library2_id is null then
-      insert into public.libraries (project_id, folder_id, name, description)
-      values (v_destruct_project2_id, v_destruct_folder2_id, 'Test Library 2', 'Library for deletion testing')
-      returning id into v_destruct_library2_id;
-      
-      -- Add field definitions
-      insert into public.library_field_definitions (library_id, label, data_type, section, order_index, required)
-      values 
-        (v_destruct_library2_id, 'Name', 'string', 'General', 0, true),
-        (v_destruct_library2_id, 'Type', 'string', 'General', 1, true),
-        (v_destruct_library2_id, 'Description', 'string', 'General', 2, false);
-    end if;
-    
-    -- Get or create root library
-    select id into v_destruct_library_root2_id from public.libraries
-    where project_id = v_destruct_project2_id and name = 'Root Library 2';
-    
-    if v_destruct_library_root2_id is null then
+    if v_happy_breed_library_id is null then
       insert into public.libraries (project_id, name, description)
-      values (v_destruct_project2_id, 'Root Library 2', 'Root-level library for deletion testing')
-      returning id into v_destruct_library_root2_id;
+      values (v_happy_project_id, 'Breed Library', 'Reference library for livestock breeds')
+      returning id into v_happy_breed_library_id;
     end if;
     
-    -- Create asset if it doesn't exist
-    if not exists (
-      select 1 from public.library_assets 
-      where library_id = v_destruct_library2_id 
-      and name = 'Test Asset 2'
-    ) then
+    -- Get or create field definitions
+    select id into v_happy_breed_name_field_id from public.library_field_definitions
+    where library_id = v_happy_breed_library_id and label = 'name';
+    
+    if v_happy_breed_name_field_id is null then
+      insert into public.library_field_definitions (library_id, label, data_type, section, order_index, required)
+      values (v_happy_breed_library_id, 'name', 'string', 'Basic Information', 0, true)
+      returning id into v_happy_breed_name_field_id;
+    end if;
+    
+    select id into v_happy_breed_origin_field_id from public.library_field_definitions
+    where library_id = v_happy_breed_library_id and label = 'Origin';
+    
+    if v_happy_breed_origin_field_id is null then
+      insert into public.library_field_definitions (library_id, label, data_type, section, order_index, required)
+      values (v_happy_breed_library_id, 'Origin', 'string', 'Basic Information', 1, false)
+      returning id into v_happy_breed_origin_field_id;
+    end if;
+    
+    -- Get or create breed asset
+    select id into v_happy_breed_asset_id from public.library_assets
+    where library_id = v_happy_breed_library_id and name = 'Black Goat Breed';
+    
+    if v_happy_breed_asset_id is null then
       insert into public.library_assets (library_id, name)
-      values (v_destruct_library2_id, 'Test Asset 2');
+      values (v_happy_breed_library_id, 'Black Goat Breed')
+      returning id into v_happy_breed_asset_id;
+    end if;
+    
+    -- Insert or update field values for the breed asset
+    insert into public.library_asset_values (asset_id, field_id, value_json)
+    values (v_happy_breed_asset_id, v_happy_breed_name_field_id, '"Black Goat Breed"'::jsonb)
+    on conflict (asset_id, field_id) do update set value_json = '"Black Goat Breed"'::jsonb;
+    
+    insert into public.library_asset_values (asset_id, field_id, value_json)
+    values (v_happy_breed_asset_id, v_happy_breed_origin_field_id, '"African Highlands"'::jsonb)
+    on conflict (asset_id, field_id) do update set value_json = '"African Highlands"'::jsonb;
+    
+    -- Create direct library if it doesn't exist
+    if not exists (
+      select 1 from public.libraries 
+      where project_id = v_happy_project_id 
+      and name = 'Direct Library'
+    ) then
+      insert into public.libraries (project_id, name, description)
+      values (v_happy_project_id, 'Direct Library', 'Library created directly under project');
     end if;
   end;
 
