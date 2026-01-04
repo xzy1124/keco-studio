@@ -20,11 +20,11 @@ import { users } from '../fixures/users';
  * 4. Project deletion
  * 
  * Prerequisites:
- * - The happy-path.spec.ts test must run first to create test data
- * - Uses the same user account (seedEmpty3) that was used in happy-path
- * - Data created by happy-path includes:
+ * - Uses pre-seeded account (seedHappyPath) that matches happy-path.spec.ts output
+ * - No need to run happy-path.spec.ts first - data is pre-populated in database
+ * - Pre-seeded data includes:
  *   - Project: "Livestock Management Project"
- *   - Breed Library (with predefined template and asset)
+ *   - Breed Library (with predefined template and asset "Black Goat Breed")
  *   - Direct Library (created directly under project)
  *   - Direct Folder (created directly under project)
  * 
@@ -51,13 +51,14 @@ test.describe('Destructive Tests - Delete Operations', () => {
     libraryPage = new LibraryPage(page);
     assetPage = new AssetPage(page);
 
-    // Authenticate user (same user from happy-path tests)
+    // Authenticate user with pre-seeded data matching happy-path test output
+    // This account has the same data structure as what happy-path.spec.ts creates
     const loginPage = new LoginPage(page);
     await loginPage.goto();
-    await loginPage.login(users.seedEmpty);
+    await loginPage.login(users.seedHappyPath);
     await loginPage.expectLoginSuccess();
 
-    // Navigate to the test project created by happy-path
+    // Navigate to the test project (pre-seeded, matches happy-path output)
     await projectPage.openProject(projects.happyPath.name);
     await libraryPage.waitForPageLoad();
   });

@@ -118,22 +118,13 @@ export const users = {
   } as UserCredentials,
 
   /**
-   * Destructive test user 1 - Pre-populated with complete test data
-   * Includes: Project → Folder → Library → Asset
-   * Used for deletion testing without depending on creation flows
+   * Happy Path test user - Pre-populated with data matching happy-path.spec.ts output
+   * Includes: Project "Livestock Management Project" → Direct Folder → Breed Library (with template and asset) → Direct Library
+   * Used by destructive.spec.ts for deletion testing
+   * This account has the exact same data structure as what happy-path.spec.ts creates
    */
-  seedDestruct1: {
-    email: 'seed-destruct-1@mailinator.com',
-    password: 'Password123!',
-  } as UserCredentials,
-
-  /**
-   * Destructive test user 2 - Pre-populated with complete test data
-   * Includes: Project → Folder → Library → Asset
-   * Used for parallel deletion testing or when first destructive account is in use
-   */
-  seedDestruct2: {
-    email: 'seed-destruct-2@mailinator.com',
+  seedHappyPath: {
+    email: 'seed-happy-path@mailinator.com',
     password: 'Password123!',
   } as UserCredentials,
 };

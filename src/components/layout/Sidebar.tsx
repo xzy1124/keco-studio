@@ -807,7 +807,10 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
             const isCurrentAsset = currentIds.assetId === asset.id;
             return {
               title: (
-                <div className={`${styles.itemRow} ${isCurrentAsset ? styles.assetItemActive : ''}`}>
+                <div 
+                  className={`${styles.itemRow} ${isCurrentAsset ? styles.assetItemActive : ''}`}
+                  onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
+                >
                   <div className={styles.itemMain}>
                     <span className={styles.itemText}>{asset.name}</span>
                   </div>

@@ -22,7 +22,8 @@ with test_users as (
     'seed-empty-3@mailinator.com',
     'seed-empty-4@mailinator.com',
     'seed-project@mailinator.com',
-    'seed-library@mailinator.com'
+    'seed-library@mailinator.com',
+    'seed-happy-path@mailinator.com'
   )
 )
 -- Delete all projects owned by test users
@@ -48,6 +49,7 @@ where u.email in (
   'seed-empty-3@mailinator.com',
   'seed-empty-4@mailinator.com',
   'seed-project@mailinator.com',
-  'seed-library@mailinator.com'
+  'seed-library@mailinator.com',
+  'seed-happy-path@mailinator.com'
 );
 

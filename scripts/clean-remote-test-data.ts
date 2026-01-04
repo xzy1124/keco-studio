@@ -35,6 +35,7 @@ const TEST_USER_EMAILS = [
   'seed-empty-4@mailinator.com',
   'seed-project@mailinator.com',
   'seed-library@mailinator.com',
+  'seed-happy-path@mailinator.com',
 ];
 
 async function cleanTestData() {
