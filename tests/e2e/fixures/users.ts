@@ -118,13 +118,26 @@ export const users = {
   } as UserCredentials,
 
   /**
-   * Happy Path test user - Pre-populated with data matching happy-path.spec.ts output
+   * Happy Path test user (Local) - Pre-populated with data matching happy-path.spec.ts output
    * Includes: Project "Livestock Management Project" → Direct Folder → Breed Library (with template and asset) → Direct Library
    * Used by destructive.spec.ts for deletion testing
    * This account has the exact same data structure as what happy-path.spec.ts creates
+   * NOTE: This is for LOCAL Supabase database
    */
   seedHappyPath: {
     email: 'seed-happy-path@mailinator.com',
+    password: 'Password123!',
+  } as UserCredentials,
+
+  /**
+   * Happy Path test user (Remote) - Pre-populated with data matching happy-path.spec.ts output
+   * Includes: Project "Livestock Management Project" → Direct Folder → Breed Library (with template and asset) → Direct Library
+   * Used for CI/GitHub Actions testing with remote Supabase
+   * Created by seed-via-api.ts script
+   * NOTE: This is for REMOTE Supabase database (CI environment)
+   */
+  seedHappyPathRemote: {
+    email: 'seed-happy-path-remote@mailinator.com',
     password: 'Password123!',
   } as UserCredentials,
 };
