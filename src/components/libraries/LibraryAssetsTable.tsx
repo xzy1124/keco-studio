@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Input, Select, Button, Avatar, Spin, Tooltip } from 'antd';
+import { Input, Select, Button, Avatar, Spin, Tooltip, Checkbox } from 'antd';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
@@ -25,6 +25,7 @@ import libraryAssetTable6Icon from '@/app/assets/images/LibraryAssetTable6.svg';
 import noassetIcon1 from '@/app/assets/images/NoassetIcon1.svg';
 import noassetIcon2 from '@/app/assets/images/NoassetIcon2.svg';
 import libraryAssetTableAddIcon from '@/app/assets/images/LibraryAssetTableAddIcon.svg';
+import libraryAssetTableSelectIcon from '@/app/assets/images/LibraryAssetTableSelectIcon.svg';
 import styles from './LibraryAssetsTable.module.css';
 
 export type LibraryAssetsTableProps = {
@@ -478,7 +479,11 @@ export function LibraryAssetsTable({
         clickedElement.closest('[role="dialog"]') ||
         clickedElement.closest('.ant-modal') ||
         clickedElement.closest('[class*="modal"]') ||
-        clickedElement.closest('[class*="Modal"]')
+        clickedElement.closest('[class*="Modal"]') ||
+        // Exclude Ant Design Select dropdown menu
+        clickedElement.closest('.ant-select-dropdown') ||
+        clickedElement.closest('[class*="select-dropdown"]') ||
+        clickedElement.closest('.rc-select-dropdown')
       )) {
         return;
       }
@@ -805,6 +810,45 @@ export function LibraryAssetsTable({
                       );
                     }
                     
+                    // Check if this is a boolean type field
+                    if (property.dataType === 'boolean') {
+                      const boolValue = editingRowData[property.key];
+                      const checked = boolValue === true || boolValue === 'true' || String(boolValue).toLowerCase() === 'true';
+                      
+                      return (
+                        <td key={property.id} className={styles.editCell}>
+                          <Checkbox
+                            checked={checked}
+                            onChange={(e) => handleEditInputChange(property.key, e.target.checked)}
+                            disabled={isSaving}
+                          />
+                        </td>
+                      );
+                    }
+                    
+                    // Check if this is an enum/option type field
+                    if (property.dataType === 'enum' && property.enumOptions && property.enumOptions.length > 0) {
+                      return (
+                        <td key={property.id} className={styles.editCell}>
+                          <Select
+                            value={editingRowData[property.key] ? String(editingRowData[property.key]) : undefined}
+                            onChange={(value) => handleEditInputChange(property.key, value)}
+                            placeholder={`Select ${property.name.toLowerCase()}`}
+                            className={styles.editInput}
+                            disabled={isSaving}
+                            allowClear
+                            getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
+                          >
+                            {property.enumOptions.map((option) => (
+                              <Select.Option key={option} value={option}>
+                                {option}
+                              </Select.Option>
+                            ))}
+                          </Select>
+                        </td>
+                      );
+                    }
+                    
                     return (
                       <td key={property.id} className={styles.editCell}>
                         <Input
@@ -838,23 +882,21 @@ export function LibraryAssetsTable({
                     const assetId = value ? String(value) : null;
                     
                       return (
-                        <Tooltip title="双击编辑" placement="top" mouseEnterDelay={0.5}>
-                          <td
-                            key={property.id}
-                            className={styles.cell}
-                            onDoubleClick={(e) => handleCellDoubleClick(row, e)}
-                          >
-                            <ReferenceField
-                              property={property}
-                              assetId={assetId}
-                              rowId={row.id}
-                              assetNamesCache={assetNamesCache}
-                              onAvatarMouseEnter={handleAvatarMouseEnter}
-                              onAvatarMouseLeave={handleAvatarMouseLeave}
-                              onOpenReferenceModal={handleOpenReferenceModal}
-                            />
-                          </td>
-                        </Tooltip>
+                        <td
+                          key={property.id}
+                          className={styles.cell}
+                          onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                        >
+                          <ReferenceField
+                            property={property}
+                            assetId={assetId}
+                            rowId={row.id}
+                            assetNamesCache={assetNamesCache}
+                            onAvatarMouseEnter={handleAvatarMouseEnter}
+                            onAvatarMouseLeave={handleAvatarMouseLeave}
+                            onOpenReferenceModal={handleOpenReferenceModal}
+                          />
+                        </td>
                       );
                   }
                   
@@ -878,49 +920,102 @@ export function LibraryAssetsTable({
                     }
                     
                     return (
-                      <Tooltip title="双击编辑" placement="top" mouseEnterDelay={0.5}>
-                        <td
-                          key={property.id}
-                          className={styles.cell}
-                          onDoubleClick={(e) => handleCellDoubleClick(row, e)}
-                        >
-                          {mediaValue ? (
-                            <div className={styles.mediaCellContent}>
-                              {isImageFile(mediaValue.fileType) ? (
-                                <div className={styles.mediaThumbnail}>
-                                  <Image
-                                    src={mediaValue.url}
-                                    alt={mediaValue.fileName}
-                                    width={32}
-                                    height={32}
-                                    className={styles.mediaThumbnailImage}
-                                    unoptimized
-                                    onError={(e) => {
-                                      // Fallback to icon if image fails to load
-                                      const target = e.target as HTMLImageElement;
-                                      target.style.display = 'none';
-                                      const parent = target.parentElement;
-                                      if (parent) {
-                                        const icon = document.createElement('span');
-                                        icon.className = styles.mediaFileIcon;
-                                        icon.textContent = getFileIcon(mediaValue!.fileType);
-                                        parent.appendChild(icon);
-                                      }
-                                    }}
-                                  />
-                                </div>
-                              ) : (
-                                <span className={styles.mediaFileIcon}>{getFileIcon(mediaValue.fileType)}</span>
-                              )}
-                              <span className={styles.mediaFileName} title={mediaValue.fileName}>
-                                {mediaValue.fileName}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className={styles.placeholderValue}>—</span>
-                          )}
-                        </td>
-                      </Tooltip>
+                      <td
+                        key={property.id}
+                        className={styles.cell}
+                        onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                      >
+                        {mediaValue ? (
+                          <div className={styles.mediaCellContent}>
+                            {isImageFile(mediaValue.fileType) ? (
+                              <div className={styles.mediaThumbnail}>
+                                <Image
+                                  src={mediaValue.url}
+                                  alt={mediaValue.fileName}
+                                  width={32}
+                                  height={32}
+                                  className={styles.mediaThumbnailImage}
+                                  unoptimized
+                                  onError={(e) => {
+                                    // Fallback to icon if image fails to load
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    const parent = target.parentElement;
+                                    if (parent) {
+                                      const icon = document.createElement('span');
+                                      icon.className = styles.mediaFileIcon;
+                                      icon.textContent = getFileIcon(mediaValue!.fileType);
+                                      parent.appendChild(icon);
+                                    }
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <span className={styles.mediaFileIcon}>{getFileIcon(mediaValue.fileType)}</span>
+                            )}
+                            <span className={styles.mediaFileName} title={mediaValue.fileName}>
+                              {mediaValue.fileName}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className={styles.placeholderValue}>—</span>
+                        )}
+                      </td>
+                    );
+                  }
+                  
+                  // Check if this is a boolean type field (display mode)
+                  if (property.dataType === 'boolean') {
+                    const value = row.propertyValues[property.key];
+                    const checked = value === true || value === 'true' || String(value).toLowerCase() === 'true';
+                    
+                    return (
+                      <td
+                        key={property.id}
+                        className={styles.cell}
+                        onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onChange={async (e) => {
+                            // Update the row data directly
+                            if (onUpdateAsset) {
+                              const updatedPropertyValues = {
+                                ...row.propertyValues,
+                                [property.key]: e.target.checked
+                              };
+                              await onUpdateAsset(row.id, row.name, updatedPropertyValues);
+                            }
+                          }}
+                        />
+                      </td>
+                    );
+                  }
+                  
+                  // Check if this is an enum/option type field (display mode)
+                  if (property.dataType === 'enum' && property.enumOptions && property.enumOptions.length > 0) {
+                    const value = row.propertyValues[property.key];
+                    const display = value !== null && value !== undefined && value !== '' ? String(value) : null;
+                    
+                    return (
+                      <td
+                        key={property.id}
+                        className={styles.cell}
+                        onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                      >
+                        <div className={styles.enumCellContent}>
+                          <span className={styles.cellText}>
+                            {display ? display : <span className={styles.placeholderValue}>—</span>}
+                          </span>
+                          <Image
+                            src={libraryAssetTableSelectIcon}
+                            alt=""
+                            width={16}
+                            height={16}
+                            className={styles.enumSelectIcon}
+                          />
+                        </div>
+                      </td>
                     );
                   }
                   
@@ -933,44 +1028,42 @@ export function LibraryAssetsTable({
                   }
 
                   return (
-                    <Tooltip title="双击编辑" placement="top" mouseEnterDelay={0.5}>
-                      <td
-                        key={property.id}
-                        className={styles.cell}
-                        onDoubleClick={(e) => handleCellDoubleClick(row, e)}
-                      >
-                        {isNameField ? (
-                          // Name field: show text + view detail button
-                          <div className={styles.cellContent}>
-                            <span className={styles.cellText}>
-                              {display ? display : <span className={styles.placeholderValue}>—</span>}
-                            </span>
-                            <button
-                              className={styles.viewDetailButton}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewAssetDetail(row, e);
-                              }}
-                              onDoubleClick={(e) => {
-                                // Prevent double click from bubbling to cell
-                                e.stopPropagation();
-                              }}
-                              title="View asset details (Ctrl/Cmd+Click for new tab)"
-                            >
-                              <Image
-                                src={assetTableIcon}
-                                alt="View"
-                                width={20}
-                                height={20}
-                              />
-                            </button>
-                          </div>
-                        ) : (
-                          // Other fields: show text only
-                          display ? display : <span className={styles.placeholderValue}>—</span>
-                        )}
-                      </td>
-                    </Tooltip>
+                    <td
+                      key={property.id}
+                      className={styles.cell}
+                      onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                    >
+                      {isNameField ? (
+                        // Name field: show text + view detail button
+                        <div className={styles.cellContent}>
+                          <span className={styles.cellText}>
+                            {display ? display : <span className={styles.placeholderValue}>—</span>}
+                          </span>
+                          <button
+                            className={styles.viewDetailButton}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewAssetDetail(row, e);
+                            }}
+                            onDoubleClick={(e) => {
+                              // Prevent double click from bubbling to cell
+                              e.stopPropagation();
+                            }}
+                            title="View asset details (Ctrl/Cmd+Click for new tab)"
+                          >
+                            <Image
+                              src={assetTableIcon}
+                              alt="View"
+                              width={20}
+                              height={20}
+                            />
+                          </button>
+                        </div>
+                      ) : (
+                        // Other fields: show text only
+                        display ? display : <span className={styles.placeholderValue}>—</span>
+                      )}
+                    </td>
                   );
                 })}
               </tr>
@@ -1018,6 +1111,45 @@ export function LibraryAssetsTable({
                   );
                 }
                 
+                // Check if this is a boolean type field
+                if (property.dataType === 'boolean') {
+                  const boolValue = newRowData[property.key];
+                  const checked = boolValue === true || boolValue === 'true' || String(boolValue).toLowerCase() === 'true';
+                  
+                  return (
+                    <td key={property.id} className={styles.editCell}>
+                      <Checkbox
+                        checked={checked}
+                        onChange={(e) => handleInputChange(property.key, e.target.checked)}
+                        disabled={isSaving}
+                      />
+                    </td>
+                  );
+                }
+                
+                // Check if this is an enum/option type field
+                if (property.dataType === 'enum' && property.enumOptions && property.enumOptions.length > 0) {
+                  return (
+                    <td key={property.id} className={styles.editCell}>
+                      <Select
+                        value={newRowData[property.key] ? String(newRowData[property.key]) : undefined}
+                        onChange={(value) => handleInputChange(property.key, value)}
+                        placeholder={`Select ${property.name.toLowerCase()}`}
+                        className={styles.editInput}
+                        disabled={isSaving}
+                        allowClear
+                        getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
+                      >
+                        {property.enumOptions.map((option) => (
+                          <Select.Option key={option} value={option}>
+                            {option}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </td>
+                  );
+                }
+                
                 return (
                   <td key={property.id} className={styles.editCell}>
                     <Input
@@ -1027,8 +1159,8 @@ export function LibraryAssetsTable({
                       className={styles.editInput}
                       disabled={isSaving}
                     />
-                    </td>
-                  );
+                  </td>
+                );
                 })}
             </tr>
           ) : (

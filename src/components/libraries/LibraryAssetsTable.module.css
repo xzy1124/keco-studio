@@ -7,6 +7,24 @@
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
+/* Custom Select dropdown styles for enum fields */
+.tableContainer :global(.ant-select-dropdown) {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.tableContainer :global(.ant-select-item-option-selected) {
+  background-color: rgba(94, 0, 255, 0.08) !important;
+}
+
+.tableContainer :global(.ant-select-item-option-selected:not(.ant-select-item-option-disabled)) {
+  background-color: rgba(94, 0, 255, 0.08) !important;
+}
+
+.tableContainer :global(.ant-select-item-option:hover) {
+  background-color: rgba(94, 0, 255, 0.04) !important;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -317,6 +335,20 @@
 .editInput {
   width: 100%;
   font-size: 13px;
+}
+
+/* Enum/Select field styles */
+.enumCellContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.enumSelectIcon {
+  flex-shrink: 0;
+  opacity: 0.6;
 }
 
 .editActions {
