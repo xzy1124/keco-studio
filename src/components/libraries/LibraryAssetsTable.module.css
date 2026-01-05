@@ -25,6 +25,11 @@
   background-color: rgba(94, 0, 255, 0.04) !important;
 }
 
+/* Disable tooltip on select options - remove title attribute tooltip */
+:global(.ant-select-dropdown .ant-select-item-option) {
+  cursor: pointer;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -91,10 +96,11 @@
   color: #111827;
   white-space: nowrap;
   text-overflow: ellipsis;
-  overflow: hidden;
+  overflow: visible;
   cursor: pointer;
   transition: background-color 0.15s ease;
   border-right: 1px solid #e2e8f0;
+  position: relative;
 }
 
 .cell:hover {
@@ -346,9 +352,47 @@
   width: 100%;
 }
 
+.enumSelectWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
 .enumSelectIcon {
   flex-shrink: 0;
   opacity: 0.6;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Enum Select display mode - make it look like read-only text */
+.enumSelectDisplay {
+  flex: 1;
+  min-width: 0;
+}
+
+.enumSelectDisplay :global(.ant-select-selector) {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  cursor: pointer;
+}
+
+.enumSelectDisplay :global(.ant-select-selection-item) {
+  padding: 0 !important;
+  line-height: inherit !important;
+}
+
+.enumSelectDisplay :global(.ant-select-selection-placeholder) {
+  padding: 0 !important;
+  line-height: inherit !important;
+}
+
+.enumSelectDisplay :global(.ant-select-arrow) {
+  display: none !important;
 }
 
 .editActions {

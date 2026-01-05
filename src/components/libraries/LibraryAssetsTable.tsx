@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Input, Select, Button, Avatar, Spin, Tooltip, Checkbox } from 'antd';
+import { Input, Select, Button, Avatar, Spin, Tooltip, Checkbox, Dropdown, Modal } from 'antd';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
@@ -39,6 +39,7 @@ export type LibraryAssetsTableProps = {
   rows: AssetRow[];
   onSaveAsset?: (assetName: string, propertyValues: Record<string, any>) => Promise<void>;
   onUpdateAsset?: (assetId: string, assetName: string, propertyValues: Record<string, any>) => Promise<void>;
+  onDeleteAsset?: (assetId: string) => Promise<void>;
 };
 
 export function LibraryAssetsTable({
@@ -48,6 +49,7 @@ export function LibraryAssetsTable({
   rows,
   onSaveAsset,
   onUpdateAsset,
+  onDeleteAsset,
 }: LibraryAssetsTableProps) {
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [newRowData, setNewRowData] = useState<Record<string, any>>({});
@@ -60,6 +62,22 @@ export function LibraryAssetsTable({
   // Optimistic update state for boolean fields: track pending boolean updates
   // Format: { rowId-propertyKey: booleanValue }
   const [optimisticBooleanValues, setOptimisticBooleanValues] = useState<Record<string, boolean>>({});
+  
+  // Optimistic update state for enum fields: track pending enum updates
+  // Format: { rowId-propertyKey: stringValue }
+  const [optimisticEnumValues, setOptimisticEnumValues] = useState<Record<string, string>>({});
+  
+  // Track which enum select dropdowns are open: { rowId-propertyKey: boolean }
+  const [openEnumSelects, setOpenEnumSelects] = useState<Record<string, boolean>>({});
+  
+  // Context menu state for right-click delete
+  const [contextMenuRowId, setContextMenuRowId] = useState<string | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
+  
+  // Optimistic update: track deleted asset IDs to hide them immediately
+  const [deletedAssetIds, setDeletedAssetIds] = useState<Set<string>>(new Set());
 
   // Ref for table container to detect clicks outside
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -650,6 +668,70 @@ export function LibraryAssetsTable({
     router.push(`/${projectId}/${libraryId}/predefine`);
   };
 
+  // Handle right-click context menu
+  const handleRowContextMenu = (e: React.MouseEvent, row: AssetRow) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Always show context menu, even if onDeleteAsset is not provided
+    setContextMenuRowId(row.id);
+    setContextMenuPosition({ x: e.clientX, y: e.clientY });
+  };
+
+  // Handle delete asset with optimistic update
+  const handleDeleteAsset = async () => {
+    if (!deletingAssetId || !onDeleteAsset) return;
+    
+    const assetIdToDelete = deletingAssetId;
+    
+    // Optimistic update: immediately hide the row
+    setDeletedAssetIds(prev => new Set(prev).add(assetIdToDelete));
+    
+    // Close modal immediately
+    setDeleteConfirmVisible(false);
+    setDeletingAssetId(null);
+    setContextMenuRowId(null);
+    setContextMenuPosition(null);
+    
+    // Delete in background
+    try {
+      await onDeleteAsset(assetIdToDelete);
+      // Success: row is already hidden, parent will refresh data
+      // Remove from deleted set after a short delay to ensure parent refresh
+      setTimeout(() => {
+        setDeletedAssetIds(prev => {
+          const next = new Set(prev);
+          next.delete(assetIdToDelete);
+          return next;
+        });
+      }, 100);
+    } catch (error) {
+      console.error('Failed to delete asset:', error);
+      // On error, revert optimistic update - show the row again
+      setDeletedAssetIds(prev => {
+        const next = new Set(prev);
+        next.delete(assetIdToDelete);
+        return next;
+      });
+      alert('Failed to delete asset. Please try again.');
+    }
+  };
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setContextMenuRowId(null);
+      setContextMenuPosition(null);
+    };
+    
+    if (contextMenuRowId) {
+      document.addEventListener('click', handleClickOutside);
+      return () => {
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }
+  }, [contextMenuRowId]);
+
   if (!hasProperties) {
     return (
       <div className={styles.tableContainer}>
@@ -766,7 +848,9 @@ export function LibraryAssetsTable({
           </tr>
         </thead>
         <tbody className={styles.body}>
-          {rows.map((row, index) => {
+          {rows
+            .filter(row => !deletedAssetIds.has(row.id))
+            .map((row, index) => {
             const isEditing = editingRowId === row.id;
             
             // If this row is being edited, show edit row
@@ -832,23 +916,57 @@ export function LibraryAssetsTable({
                     
                     // Check if this is an enum/option type field
                     if (property.dataType === 'enum' && property.enumOptions && property.enumOptions.length > 0) {
+                      const enumSelectKey = `edit-${editingRowId}-${property.key}`;
+                      const isOpen = openEnumSelects[enumSelectKey] || false;
+                      const value = editingRowData[property.key];
+                      const display = value !== null && value !== undefined && value !== '' ? String(value) : null;
+                      
                       return (
                         <td key={property.id} className={styles.editCell}>
-                          <Select
-                            value={editingRowData[property.key] ? String(editingRowData[property.key]) : undefined}
-                            onChange={(value) => handleEditInputChange(property.key, value)}
-                            placeholder={`Select ${property.name.toLowerCase()}`}
-                            className={styles.editInput}
-                            disabled={isSaving}
-                            allowClear
-                            getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
-                          >
-                            {property.enumOptions.map((option) => (
-                              <Select.Option key={option} value={option}>
-                                {option}
-                              </Select.Option>
-                            ))}
-                          </Select>
+                          <div className={styles.enumSelectWrapper}>
+                            <Select
+                              value={display || undefined}
+                              open={isOpen}
+                              onOpenChange={(open) => {
+                                setOpenEnumSelects(prev => ({
+                                  ...prev,
+                                  [enumSelectKey]: open
+                                }));
+                              }}
+                              onChange={(newValue) => {
+                                handleEditInputChange(property.key, newValue);
+                                // Close dropdown
+                                setOpenEnumSelects(prev => ({
+                                  ...prev,
+                                  [enumSelectKey]: false
+                                }));
+                              }}
+                              className={styles.enumSelectDisplay}
+                              suffixIcon={null}
+                              disabled={isSaving}
+                              getPopupContainer={() => document.body}
+                            >
+                              {property.enumOptions.map((option) => (
+                                <Select.Option key={option} value={option} title="">
+                                  {option}
+                                </Select.Option>
+                              ))}
+                            </Select>
+                            <Image
+                              src={libraryAssetTableSelectIcon}
+                              alt=""
+                              width={16}
+                              height={16}
+                              className={styles.enumSelectIcon}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenEnumSelects(prev => ({
+                                  ...prev,
+                                  [enumSelectKey]: !prev[enumSelectKey]
+                                }));
+                              }}
+                            />
+                          </div>
                         </td>
                       );
                     }
@@ -874,6 +992,7 @@ export function LibraryAssetsTable({
               <tr
                 key={row.id}
                 className={styles.row}
+                onContextMenu={(e) => handleRowContextMenu(e, row)}
               >
                 <td className={styles.numberCell}>{index + 1}</td>
                 {orderedProperties.map((property, propertyIndex) => {
@@ -1031,8 +1150,16 @@ export function LibraryAssetsTable({
                   
                   // Check if this is an enum/option type field (display mode)
                   if (property.dataType === 'enum' && property.enumOptions && property.enumOptions.length > 0) {
-                    const value = row.propertyValues[property.key];
+                    const enumSelectKey = `${row.id}-${property.key}`;
+                    const hasOptimisticValue = enumSelectKey in optimisticEnumValues;
+                    
+                    // Use optimistic value if available, otherwise use row value
+                    const value = hasOptimisticValue 
+                      ? optimisticEnumValues[enumSelectKey]
+                      : row.propertyValues[property.key];
+                    
                     const display = value !== null && value !== undefined && value !== '' ? String(value) : null;
+                    const isOpen = openEnumSelects[enumSelectKey] || false;
                     
                     return (
                       <td
@@ -1040,16 +1167,81 @@ export function LibraryAssetsTable({
                         className={styles.cell}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                       >
-                        <div className={styles.enumCellContent}>
-                          <span className={styles.cellText}>
-                            {display ? display : <span className={styles.placeholderValue}>—</span>}
-                          </span>
+                        <div className={styles.enumSelectWrapper}>
+                          <Select
+                            value={display || undefined}
+                            open={isOpen}
+                            onOpenChange={(open) => {
+                              setOpenEnumSelects(prev => ({
+                                ...prev,
+                                [enumSelectKey]: open
+                              }));
+                            }}
+                            onChange={async (newValue) => {
+                              const stringValue = newValue || '';
+                              
+                              // Optimistic update: immediately update UI
+                              setOptimisticEnumValues(prev => ({
+                                ...prev,
+                                [enumSelectKey]: stringValue
+                              }));
+                              
+                              // Update the value in background
+                              if (onUpdateAsset) {
+                                try {
+                                  const updatedPropertyValues = {
+                                    ...row.propertyValues,
+                                    [property.key]: stringValue
+                                  };
+                                  await onUpdateAsset(row.id, row.name, updatedPropertyValues);
+                                  
+                                  // Remove optimistic value after successful update
+                                  // The component will re-render with new props from parent
+                                  setOptimisticEnumValues(prev => {
+                                    const next = { ...prev };
+                                    delete next[enumSelectKey];
+                                    return next;
+                                  });
+                                } catch (error) {
+                                  // On error, revert optimistic update
+                                  setOptimisticEnumValues(prev => {
+                                    const next = { ...prev };
+                                    delete next[enumSelectKey];
+                                    return next;
+                                  });
+                                  console.error('Failed to update enum value:', error);
+                                }
+                              }
+                              
+                              // Close dropdown
+                              setOpenEnumSelects(prev => ({
+                                ...prev,
+                                [enumSelectKey]: false
+                              }));
+                            }}
+                            className={styles.enumSelectDisplay}
+                            suffixIcon={null}
+                            getPopupContainer={() => document.body}
+                          >
+                            {property.enumOptions.map((option) => (
+                              <Select.Option key={option} value={option} title="">
+                                {option}
+                              </Select.Option>
+                            ))}
+                          </Select>
                           <Image
                             src={libraryAssetTableSelectIcon}
                             alt=""
                             width={16}
                             height={16}
                             className={styles.enumSelectIcon}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenEnumSelects(prev => ({
+                                ...prev,
+                                [enumSelectKey]: !prev[enumSelectKey]
+                              }));
+                            }}
                           />
                         </div>
                       </td>
@@ -1166,23 +1358,57 @@ export function LibraryAssetsTable({
                 
                 // Check if this is an enum/option type field
                 if (property.dataType === 'enum' && property.enumOptions && property.enumOptions.length > 0) {
+                  const enumSelectKey = `new-${property.key}`;
+                  const isOpen = openEnumSelects[enumSelectKey] || false;
+                  const value = newRowData[property.key];
+                  const display = value !== null && value !== undefined && value !== '' ? String(value) : null;
+                  
                   return (
                     <td key={property.id} className={styles.editCell}>
-                      <Select
-                        value={newRowData[property.key] ? String(newRowData[property.key]) : undefined}
-                        onChange={(value) => handleInputChange(property.key, value)}
-                        placeholder={`Select ${property.name.toLowerCase()}`}
-                        className={styles.editInput}
-                        disabled={isSaving}
-                        allowClear
-                        getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
-                      >
-                        {property.enumOptions.map((option) => (
-                          <Select.Option key={option} value={option}>
-                            {option}
-                          </Select.Option>
-                        ))}
-                      </Select>
+                      <div className={styles.enumSelectWrapper}>
+                        <Select
+                          value={display || undefined}
+                          open={isOpen}
+                          onOpenChange={(open) => {
+                            setOpenEnumSelects(prev => ({
+                              ...prev,
+                              [enumSelectKey]: open
+                            }));
+                          }}
+                          onChange={(newValue) => {
+                            handleInputChange(property.key, newValue);
+                            // Close dropdown
+                            setOpenEnumSelects(prev => ({
+                              ...prev,
+                              [enumSelectKey]: false
+                            }));
+                          }}
+                          className={styles.enumSelectDisplay}
+                          suffixIcon={null}
+                          disabled={isSaving}
+                          getPopupContainer={() => document.body}
+                        >
+                          {property.enumOptions.map((option) => (
+                            <Select.Option key={option} value={option} title="">
+                              {option}
+                            </Select.Option>
+                          ))}
+                        </Select>
+                        <Image
+                          src={libraryAssetTableSelectIcon}
+                          alt=""
+                          width={16}
+                          height={16}
+                          className={styles.enumSelectIcon}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenEnumSelects(prev => ({
+                              ...prev,
+                              [enumSelectKey]: !prev[enumSelectKey]
+                            }));
+                          }}
+                        />
+                      </div>
                     </td>
                   );
                 }
@@ -1338,6 +1564,76 @@ export function LibraryAssetsTable({
       </>,
       document.body
     )}
+
+    {/* Context Menu for right-click delete */}
+    {contextMenuRowId && contextMenuPosition && (typeof document !== 'undefined') && createPortal(
+      <div
+        style={{
+          position: 'fixed',
+          left: `${contextMenuPosition.x}px`,
+          top: `${contextMenuPosition.y}px`,
+          zIndex: 1000,
+          backgroundColor: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '6px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          padding: 0,
+          minWidth: '120px',
+          overflow: 'hidden',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{
+            padding: '8px 16px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            color: '#ff4d4f',
+            transition: 'background-color 0.2s',
+            width: '100%',
+            boxSizing: 'border-box',
+            margin: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#fff1f0';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+          onClick={() => {
+            if (!onDeleteAsset) {
+              alert('Delete function is not enabled. Please provide onDeleteAsset callback.');
+              setContextMenuRowId(null);
+              setContextMenuPosition(null);
+              return;
+            }
+            setDeletingAssetId(contextMenuRowId);
+            setDeleteConfirmVisible(true);
+            setContextMenuRowId(null);
+            setContextMenuPosition(null);
+          }}
+        >
+          Delete
+        </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Delete Confirmation Modal */}
+    <Modal
+      open={deleteConfirmVisible}
+      title="Confirm Delete"
+      onOk={handleDeleteAsset}
+      onCancel={() => {
+        setDeleteConfirmVisible(false);
+        setDeletingAssetId(null);
+      }}
+      okText="Delete"
+      cancelText="Cancel"
+      okButtonProps={{ danger: true }}
+    >
+      <p>Are you sure you want to delete this asset? This action cannot be undone.</p>
+    </Modal>
     </>
   );
 }
