@@ -9,6 +9,11 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
     env:
       # Use GitHub Secrets for Supabase credentials
       # If secrets are not set, tests that require real Supabase will be skipped
@@ -64,15 +69,15 @@ jobs:
       run: npm run seed:api
       continue-on-error: true
     
-    # Run tests
-    - name: Run Playwright tests (sequential)
-      run: npm run test:e2e:sequential
+    # Run tests with sharding for parallel execution
+    - name: Run Playwright tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+      run: npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       continue-on-error: false
     
-    # Upload test results
+    # Upload test results for each shard
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
-        name: playwright-report
+        name: playwright-report-${{ matrix.shardIndex }}
         path: playwright-report/
         retention-days: 30
