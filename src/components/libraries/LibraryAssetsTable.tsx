@@ -56,6 +56,10 @@ export function LibraryAssetsTable({
   // Edit mode state: track which row is being edited and its data
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editingRowData, setEditingRowData] = useState<Record<string, any>>({});
+  
+  // Optimistic update state for boolean fields: track pending boolean updates
+  // Format: { rowId-propertyKey: booleanValue }
+  const [optimisticBooleanValues, setOptimisticBooleanValues] = useState<Record<string, boolean>>({});
 
   // Ref for table container to detect clicks outside
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -966,7 +970,14 @@ export function LibraryAssetsTable({
                   
                   // Check if this is a boolean type field (display mode)
                   if (property.dataType === 'boolean') {
-                    const value = row.propertyValues[property.key];
+                    const optimisticKey = `${row.id}-${property.key}`;
+                    const hasOptimisticValue = optimisticKey in optimisticBooleanValues;
+                    
+                    // Use optimistic value if available, otherwise use row value
+                    const value = hasOptimisticValue 
+                      ? optimisticBooleanValues[optimisticKey]
+                      : row.propertyValues[property.key];
+                    
                     const checked = value === true || value === 'true' || String(value).toLowerCase() === 'true';
                     
                     return (
@@ -978,13 +989,39 @@ export function LibraryAssetsTable({
                         <Checkbox
                           checked={checked}
                           onChange={async (e) => {
-                            // Update the row data directly
+                            const newValue = e.target.checked;
+                            
+                            // Optimistic update: immediately update UI
+                            setOptimisticBooleanValues(prev => ({
+                              ...prev,
+                              [optimisticKey]: newValue
+                            }));
+                            
+                            // Update the row data in background
                             if (onUpdateAsset) {
-                              const updatedPropertyValues = {
-                                ...row.propertyValues,
-                                [property.key]: e.target.checked
-                              };
-                              await onUpdateAsset(row.id, row.name, updatedPropertyValues);
+                              try {
+                                const updatedPropertyValues = {
+                                  ...row.propertyValues,
+                                  [property.key]: newValue
+                                };
+                                await onUpdateAsset(row.id, row.name, updatedPropertyValues);
+                                
+                                // Remove optimistic value after successful update
+                                // The component will re-render with new props from parent
+                                setOptimisticBooleanValues(prev => {
+                                  const next = { ...prev };
+                                  delete next[optimisticKey];
+                                  return next;
+                                });
+                              } catch (error) {
+                                // On error, revert optimistic update
+                                setOptimisticBooleanValues(prev => {
+                                  const next = { ...prev };
+                                  delete next[optimisticKey];
+                                  return next;
+                                });
+                                console.error('Failed to update boolean value:', error);
+                              }
                             }
                           }}
                         />
