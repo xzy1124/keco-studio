@@ -24,6 +24,7 @@ import libraryAssetTable5Icon from '@/app/assets/images/LibraryAssetTable5.svg';
 import libraryAssetTable6Icon from '@/app/assets/images/LibraryAssetTable6.svg';
 import noassetIcon1 from '@/app/assets/images/NoassetIcon1.svg';
 import noassetIcon2 from '@/app/assets/images/NoassetIcon2.svg';
+import libraryAssetTableAddIcon from '@/app/assets/images/LibraryAssetTableAddIcon.svg';
 import styles from './LibraryAssetsTable.module.css';
 
 export type LibraryAssetsTableProps = {
@@ -462,9 +463,28 @@ export function LibraryAssetsTable({
   useEffect(() => {
     const handleClickOutside = async (event: MouseEvent) => {
       if (isSaving) return;
+      
+      // Don't trigger auto-save if reference modal is open
+      if (referenceModalOpen) {
+        return;
+      }
+
+      const target = event.target as Node;
+      
+      // Don't trigger auto-save if clicking on modal or modal-related elements
+      // Check if the click is on a modal element (modals are typically rendered outside the table container)
+      const clickedElement = target as Element;
+      if (clickedElement.closest && (
+        clickedElement.closest('[role="dialog"]') ||
+        clickedElement.closest('.ant-modal') ||
+        clickedElement.closest('[class*="modal"]') ||
+        clickedElement.closest('[class*="Modal"]')
+      )) {
+        return;
+      }
 
       // Check if click is outside the table container
-      if (tableContainerRef.current && !tableContainerRef.current.contains(event.target as Node)) {
+      if (tableContainerRef.current && !tableContainerRef.current.contains(target)) {
         // Handle new row auto-save
         if (isAddingRow) {
           // Check if we have at least some data to save
@@ -526,7 +546,7 @@ export function LibraryAssetsTable({
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }
-  }, [isAddingRow, editingRowId, isSaving, newRowData, editingRowData, onSaveAsset, onUpdateAsset, properties, rows]);
+  }, [isAddingRow, editingRowId, isSaving, newRowData, editingRowData, onSaveAsset, onUpdateAsset, properties, rows, referenceModalOpen]);
 
   // Handle input change for new row
   const handleInputChange = (propertyId: string, value: any) => {
@@ -700,11 +720,9 @@ export function LibraryAssetsTable({
           {/* First row: Section headers (Basic Info, Visual Info, etc.) */}
           <tr className={styles.headerRowTop}>
             <th
-              rowSpan={2}
               scope="col"
               className={`${styles.headerCell} ${styles.numberColumnHeader}`}
             >
-              #
             </th>
             {groups.map((group) => (
               <th
@@ -717,8 +735,14 @@ export function LibraryAssetsTable({
               </th>
             ))}
           </tr>
-          {/* Second row: Property headers (name, skill, clod, etc.) */}
+          {/* Second row: # and property headers (name, skill, clod, etc.) */}
           <tr className={styles.headerRowBottom}>
+            <th
+              scope="col"
+              className={`${styles.headerCell} ${styles.numberColumnHeader}`}
+            >
+              #
+            </th>
             {groups.map((group) =>
               group.properties.map((property) => (
                 <th
@@ -1006,7 +1030,7 @@ export function LibraryAssetsTable({
             </tr>
           ) : (
             <tr className={styles.addRow}>
-              <td colSpan={totalColumns}>
+              <td className={styles.numberCell}>
                 <button
                   className={styles.addButton}
                   onClick={() => {
@@ -1019,9 +1043,17 @@ export function LibraryAssetsTable({
                   }}
                   disabled={editingRowId !== null}
                 >
-                  + Add New Asset
+                  <Image
+                    src={libraryAssetTableAddIcon}
+                    alt="Add new asset"
+                    width={16}
+                    height={16}
+                  />
                 </button>
               </td>
+              {orderedProperties.map((property) => (
+                <td key={property.id} className={styles.cell}></td>
+              ))}
             </tr>
           )}
         </tbody>
