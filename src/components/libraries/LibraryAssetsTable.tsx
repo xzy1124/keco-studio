@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Input, Select, Button, Avatar, Spin } from 'antd';
+import { Input, Select, Button, Avatar, Spin, Tooltip } from 'antd';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
@@ -838,22 +838,23 @@ export function LibraryAssetsTable({
                     const assetId = value ? String(value) : null;
                     
                       return (
-                        <td
-                          key={property.id}
-                          className={styles.cell}
-                          onDoubleClick={(e) => handleCellDoubleClick(row, e)}
-                          title="双击编辑"
-                        >
-                          <ReferenceField
-                            property={property}
-                            assetId={assetId}
-                            rowId={row.id}
-                            assetNamesCache={assetNamesCache}
-                            onAvatarMouseEnter={handleAvatarMouseEnter}
-                            onAvatarMouseLeave={handleAvatarMouseLeave}
-                            onOpenReferenceModal={handleOpenReferenceModal}
-                          />
-                        </td>
+                        <Tooltip title="双击编辑" placement="top" mouseEnterDelay={0.5}>
+                          <td
+                            key={property.id}
+                            className={styles.cell}
+                            onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                          >
+                            <ReferenceField
+                              property={property}
+                              assetId={assetId}
+                              rowId={row.id}
+                              assetNamesCache={assetNamesCache}
+                              onAvatarMouseEnter={handleAvatarMouseEnter}
+                              onAvatarMouseLeave={handleAvatarMouseLeave}
+                              onOpenReferenceModal={handleOpenReferenceModal}
+                            />
+                          </td>
+                        </Tooltip>
                       );
                   }
                   
@@ -877,48 +878,49 @@ export function LibraryAssetsTable({
                     }
                     
                     return (
-                      <td
-                        key={property.id}
-                        className={styles.cell}
-                        onDoubleClick={(e) => handleCellDoubleClick(row, e)}
-                        title="双击编辑"
-                      >
-                        {mediaValue ? (
-                          <div className={styles.mediaCellContent}>
-                            {isImageFile(mediaValue.fileType) ? (
-                              <div className={styles.mediaThumbnail}>
-                                <Image
-                                  src={mediaValue.url}
-                                  alt={mediaValue.fileName}
-                                  width={32}
-                                  height={32}
-                                  className={styles.mediaThumbnailImage}
-                                  unoptimized
-                                  onError={(e) => {
-                                    // Fallback to icon if image fails to load
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = 'none';
-                                    const parent = target.parentElement;
-                                    if (parent) {
-                                      const icon = document.createElement('span');
-                                      icon.className = styles.mediaFileIcon;
-                                      icon.textContent = getFileIcon(mediaValue!.fileType);
-                                      parent.appendChild(icon);
-                                    }
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <span className={styles.mediaFileIcon}>{getFileIcon(mediaValue.fileType)}</span>
-                            )}
-                            <span className={styles.mediaFileName} title={mediaValue.fileName}>
-                              {mediaValue.fileName}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className={styles.placeholderValue}>—</span>
-                        )}
-                      </td>
+                      <Tooltip title="双击编辑" placement="top" mouseEnterDelay={0.5}>
+                        <td
+                          key={property.id}
+                          className={styles.cell}
+                          onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                        >
+                          {mediaValue ? (
+                            <div className={styles.mediaCellContent}>
+                              {isImageFile(mediaValue.fileType) ? (
+                                <div className={styles.mediaThumbnail}>
+                                  <Image
+                                    src={mediaValue.url}
+                                    alt={mediaValue.fileName}
+                                    width={32}
+                                    height={32}
+                                    className={styles.mediaThumbnailImage}
+                                    unoptimized
+                                    onError={(e) => {
+                                      // Fallback to icon if image fails to load
+                                      const target = e.target as HTMLImageElement;
+                                      target.style.display = 'none';
+                                      const parent = target.parentElement;
+                                      if (parent) {
+                                        const icon = document.createElement('span');
+                                        icon.className = styles.mediaFileIcon;
+                                        icon.textContent = getFileIcon(mediaValue!.fileType);
+                                        parent.appendChild(icon);
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <span className={styles.mediaFileIcon}>{getFileIcon(mediaValue.fileType)}</span>
+                              )}
+                              <span className={styles.mediaFileName} title={mediaValue.fileName}>
+                                {mediaValue.fileName}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className={styles.placeholderValue}>—</span>
+                          )}
+                        </td>
+                      </Tooltip>
                     );
                   }
                   
@@ -931,43 +933,44 @@ export function LibraryAssetsTable({
                   }
 
                   return (
-                    <td
-                      key={property.id}
-                      className={styles.cell}
-                      onDoubleClick={(e) => handleCellDoubleClick(row, e)}
-                      title="双击编辑"
-                    >
-                      {isNameField ? (
-                        // Name field: show text + view detail button
-                        <div className={styles.cellContent}>
-                          <span className={styles.cellText}>
-                            {display ? display : <span className={styles.placeholderValue}>—</span>}
-                          </span>
-                          <button
-                            className={styles.viewDetailButton}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleViewAssetDetail(row, e);
-                            }}
-                            onDoubleClick={(e) => {
-                              // Prevent double click from bubbling to cell
-                              e.stopPropagation();
-                            }}
-                            title="View asset details (Ctrl/Cmd+Click for new tab)"
-                          >
-                            <Image
-                              src={assetTableIcon}
-                              alt="View"
-                              width={20}
-                              height={20}
-                            />
-                          </button>
-                        </div>
-                      ) : (
-                        // Other fields: show text only
-                        display ? display : <span className={styles.placeholderValue}>—</span>
-                      )}
-                    </td>
+                    <Tooltip title="双击编辑" placement="top" mouseEnterDelay={0.5}>
+                      <td
+                        key={property.id}
+                        className={styles.cell}
+                        onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                      >
+                        {isNameField ? (
+                          // Name field: show text + view detail button
+                          <div className={styles.cellContent}>
+                            <span className={styles.cellText}>
+                              {display ? display : <span className={styles.placeholderValue}>—</span>}
+                            </span>
+                            <button
+                              className={styles.viewDetailButton}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewAssetDetail(row, e);
+                              }}
+                              onDoubleClick={(e) => {
+                                // Prevent double click from bubbling to cell
+                                e.stopPropagation();
+                              }}
+                              title="View asset details (Ctrl/Cmd+Click for new tab)"
+                            >
+                              <Image
+                                src={assetTableIcon}
+                                alt="View"
+                                width={20}
+                                height={20}
+                              />
+                            </button>
+                          </div>
+                        ) : (
+                          // Other fields: show text only
+                          display ? display : <span className={styles.placeholderValue}>—</span>
+                        )}
+                      </td>
+                    </Tooltip>
                   );
                 })}
               </tr>
