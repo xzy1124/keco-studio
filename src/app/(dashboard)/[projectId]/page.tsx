@@ -67,6 +67,7 @@ export default function ProjectPage() {
       setFolders(foldersData);
       setLibraries(librariesData);
       setFolderLibraries(folderLibrariesMap);
+      setLoading(false);
     } catch (e: any) {
       // If it's an authorization error, redirect immediately without showing error
       // This provides better UX and security (no flash of error message)
@@ -89,7 +90,7 @@ export default function ProjectPage() {
       setError(e?.message || 'Failed to load project');
       setLoading(false);
     }
-  }, [projectId, supabase, router]);
+  }, [projectId, supabase]);
 
   useEffect(() => {
     fetchData();
