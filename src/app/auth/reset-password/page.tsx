@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useSupabase } from '@/lib/SupabaseContext';
 import loginImg from '@/app/assets/images/loginImg.png';
 import loginLeftArrowIcon from '@/app/assets/images/loginArrowIcon.svg';
@@ -11,7 +11,6 @@ import styles from './page.module.css';
 export default function ResetPasswordPage() {
   const supabase = useSupabase();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
