@@ -347,7 +347,7 @@ export default function AuthForm() {
                   type="button" 
                   className={styles.forgotPassword}
                   onClick={() => {
-                    // TODO: Implement forgot password functionality
+                    window.location.href = '/forgot-password';
                   }}
                 >
                   Forget you password?
