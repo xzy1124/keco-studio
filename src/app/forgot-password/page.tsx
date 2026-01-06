@@ -12,6 +12,8 @@ export default function ForgotPasswordPage() {
   const [step, setStep] = useState<'verify' | 'change'>('verify');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleBack = () => {
     router.push('/');
@@ -21,11 +23,23 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     // TODO: Implement verify code logic
     // After successful verification, move to step 2
-    // setStep('change');
+    setStep('change');
   };
 
   const handleResendCode = () => {
     // TODO: Implement resend code logic
+  };
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    // TODO: Implement change password logic
+    if (newPassword !== confirmPassword) {
+      // TODO: Show error message
+      return;
+    }
+    // TODO: Call API to change password
+    // After successful password change, redirect to login
+    router.push('/');
   };
 
   return (
@@ -61,58 +75,105 @@ export default function ForgotPasswordPage() {
 
             {/* Step Indicator */}
             <div className={styles.stepIndicator}>
-              <div className={`${styles.step} ${step === 'verify' ? styles.stepActive : styles.stepInactive}`}>
-                <span className={styles.stepNumber}>①</span>
-                <span className={styles.stepText}>Verify</span>
-              </div>
-              <div className={`${styles.step} ${step === 'change' ? styles.stepActive : styles.stepInactive}`}>
-                <span className={styles.stepNumber}>②</span>
-                <span className={styles.stepText}>Change password</span>
-              </div>
-            </div>
-
-            {/* Form */}
-            <form className={styles.form} onSubmit={handleVerifyCode}>
-              <label className={styles.label}>
-                Email or username
-                <input
-                  className={styles.input}
-                  type="text"
-                  placeholder="type your email or username..."
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </label>
-              
-              <label className={styles.label}>
-                Code
-                <input
-                  className={styles.input}
-                  type="text"
-                  placeholder="type your code..."
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                />
-              </label>
-
-              <button type="submit" className={styles.submit} disabled={!email || !code}>
-                Verify code
-              </button>
-            </form>
-
-            {/* Resend Code Link */}
-            <div className={styles.resendSection}>
-              <span className={styles.resendText}>don't receive the code?</span>
-              <button 
-                type="button" 
-                className={styles.resendLink}
-                onClick={handleResendCode}
+              <button
+                type="button"
+                className={`${styles.step} ${step === 'verify' ? styles.stepActive : styles.stepInactive}`}
+                onClick={() => setStep('verify')}
               >
-                Resend code
+                <span className={styles.stepNumber}>1</span>
+                <span className={styles.stepText}>Verify</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.step} ${step === 'change' ? styles.stepActive : styles.stepInactive}`}
+                onClick={() => setStep('change')}
+              >
+                <span className={styles.stepNumber}>2</span>
+                <span className={styles.stepText}>Change password</span>
               </button>
             </div>
+
+            {/* Verify Step Form */}
+            {step === 'verify' && (
+              <form className={styles.form} onSubmit={handleVerifyCode}>
+                <label className={styles.label}>
+                  Email or username
+                  <input
+                    className={styles.input}
+                    type="text"
+                    placeholder="type your email or username..."
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </label>
+                
+                <label className={styles.label}>
+                  Code
+                  <input
+                    className={styles.input}
+                    type="text"
+                    placeholder="type your code..."
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    required
+                  />
+                </label>
+
+                <button type="submit" className={styles.submit} disabled={!email || !code}>
+                  Verify code
+                </button>
+
+                {/* Resend Code Link */}
+                <div className={styles.resendSection}>
+                  <span className={styles.resendText}>don't receive the code?</span>
+                  <button 
+                    type="button" 
+                    className={styles.resendLink}
+                    onClick={handleResendCode}
+                  >
+                    Resend code
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Change Password Step Form */}
+            {step === 'change' && (
+              <form className={styles.form} onSubmit={handleChangePassword}>
+                <label className={styles.label}>
+                  New password
+                  <input
+                    className={styles.input}
+                    type="password"
+                    placeholder="type your new password..."
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                  />
+                </label>
+                
+                <label className={styles.label}>
+                  Confirm password
+                  <input
+                    className={styles.input}
+                    type="password"
+                    placeholder="type your confirm password..."
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                </label>
+
+                <button 
+                  type="submit" 
+                  className={styles.submit} 
+                  disabled={!newPassword || !confirmPassword}
+                >
+                  Confirm
+                </button>
+              </form>
+            )}
           </div>
 
           <div className={styles.imageSide}>
