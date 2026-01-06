@@ -3,43 +3,47 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { useSupabase } from '@/lib/SupabaseContext';
 import loginImg from '@/app/assets/images/loginImg.png';
 import loginLeftArrowIcon from '@/app/assets/images/loginArrowIcon.svg';
 import styles from './page.module.css';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
-  const [step, setStep] = useState<'verify' | 'change'>('verify');
+  const supabase = useSupabase();
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleBack = () => {
     router.push('/');
   };
 
-  const handleVerifyCode = (e: React.FormEvent) => {
+  const handleSendResetEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement verify code logic
-    // After successful verification, move to step 2
-    setStep('change');
-  };
+    setMessage(null);
+    setErrorMsg(null);
 
-  const handleResendCode = () => {
-    // TODO: Implement resend code logic
-  };
-
-  const handleChangePassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: Implement change password logic
-    if (newPassword !== confirmPassword) {
-      // TODO: Show error message
+    if (!email) {
+      setErrorMsg('Email is required');
       return;
     }
-    // TODO: Call API to change password
-    // After successful password change, redirect to login
-    router.push('/');
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+
+      if (error) throw error;
+
+      setMessage('Password reset email sent! Please check your inbox and click the link to reset your password.');
+    } catch (error: any) {
+      setErrorMsg(error?.message || 'Failed to send reset email');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -75,105 +79,38 @@ export default function ForgotPasswordPage() {
 
             {/* Step Indicator */}
             <div className={styles.stepIndicator}>
-              <button
-                type="button"
-                className={`${styles.step} ${step === 'verify' ? styles.stepActive : styles.stepInactive}`}
-                onClick={() => setStep('verify')}
-              >
+              <div className={`${styles.step} ${styles.stepActive}`}>
                 <span className={styles.stepNumber}>1</span>
                 <span className={styles.stepText}>Verify</span>
-              </button>
-              <button
-                type="button"
-                className={`${styles.step} ${step === 'change' ? styles.stepActive : styles.stepInactive}`}
-                onClick={() => setStep('change')}
-              >
+              </div>
+              <div className={`${styles.step} ${styles.stepInactive}`}>
                 <span className={styles.stepNumber}>2</span>
                 <span className={styles.stepText}>Change password</span>
-              </button>
+              </div>
             </div>
 
-            {/* Verify Step Form */}
-            {step === 'verify' && (
-              <form className={styles.form} onSubmit={handleVerifyCode}>
-                <label className={styles.label}>
-                  Email or username
-                  <input
-                    className={styles.input}
-                    type="text"
-                    placeholder="type your email or username..."
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </label>
-                
-                <label className={styles.label}>
-                  Code
-                  <input
-                    className={styles.input}
-                    type="text"
-                    placeholder="type your code..."
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    required
-                  />
-                </label>
+            {/* Send Reset Email Form */}
+            <form className={styles.form} onSubmit={handleSendResetEmail}>
+              <label className={styles.label}>
+                Email or username
+                <input
+                  className={styles.input}
+                  type="text"
+                  inputMode="email"
+                  placeholder="type your email or username..."
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </label>
 
-                <button type="submit" className={styles.submit} disabled={!email || !code}>
-                  Verify code
-                </button>
+              {errorMsg && <div className={styles.error}>{errorMsg}</div>}
+              {message && <div className={styles.success}>{message}</div>}
 
-                {/* Resend Code Link */}
-                <div className={styles.resendSection}>
-                  <span className={styles.resendText}>don't receive the code?</span>
-                  <button 
-                    type="button" 
-                    className={styles.resendLink}
-                    onClick={handleResendCode}
-                  >
-                    Resend code
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Change Password Step Form */}
-            {step === 'change' && (
-              <form className={styles.form} onSubmit={handleChangePassword}>
-                <label className={styles.label}>
-                  New password
-                  <input
-                    className={styles.input}
-                    type="password"
-                    placeholder="type your new password..."
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                  />
-                </label>
-                
-                <label className={styles.label}>
-                  Confirm password
-                  <input
-                    className={styles.input}
-                    type="password"
-                    placeholder="type your confirm password..."
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                  />
-                </label>
-
-                <button 
-                  type="submit" 
-                  className={styles.submit} 
-                  disabled={!newPassword || !confirmPassword}
-                >
-                  Confirm
-                </button>
-              </form>
-            )}
+              <button type="submit" className={styles.submit} disabled={!email || loading}>
+                {loading ? 'Sending...' : 'Send reset link'}
+              </button>
+            </form>
           </div>
 
           <div className={styles.imageSide}>
