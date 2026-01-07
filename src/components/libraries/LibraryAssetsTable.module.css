@@ -340,6 +340,18 @@
   background: #fffbeb;
 }
 
+.booleanToggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.booleanLabel {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+}
+
 .editCell {
   padding: 8px 12px;
   vertical-align: middle;
