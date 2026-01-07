@@ -39,18 +39,18 @@ jobs:
       with:
         version: latest
     
-    # Stop Supabase if running (cleanup from previous runs)
-    - name: Stop Supabase (if running)
+    # Start local Supabase instance
+    - name: Start Supabase
       run: |
-        supabase stop || true
-        echo "✅ Supabase stopped (if was running)"
+        supabase start
+        echo "✅ Supabase started successfully"
     
-    # Reset and start local Supabase instance
-    # This ensures a clean database state with fresh seed data for each test run
-    - name: Reset and Start Supabase
+    # Reset database to ensure clean state with fresh seed data
+    # This is important for test consistency across runs
+    - name: Reset database with seed data
       run: |
         supabase db reset
-        echo "✅ Supabase reset and started successfully with fresh seed data"
+        echo "✅ Database reset completed with fresh seed data"
     
     # Set Supabase environment variables from local instance
     - name: Set Supabase environment variables
