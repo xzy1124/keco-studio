@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Input, Select, Button, Avatar, Spin, Tooltip, Checkbox, Dropdown, Modal } from 'antd';
+import { Input, Select, Button, Avatar, Spin, Tooltip, Checkbox, Dropdown, Modal, Switch } from 'antd';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
@@ -1172,11 +1172,16 @@ export function LibraryAssetsTable({
                       
                       return (
                         <td key={property.id} className={styles.editCell}>
-                          <Checkbox
-                            checked={checked}
-                            onChange={(e) => handleEditInputChange(property.key, e.target.checked)}
-                            disabled={isSaving}
-                          />
+                          <div className={styles.booleanToggle}>
+                            <Switch
+                              checked={checked}
+                              onChange={(checked) => handleEditInputChange(property.key, checked)}
+                              disabled={isSaving}
+                            />
+                            <span className={styles.booleanLabel}>
+                              {checked ? 'True' : 'False'}
+                            </span>
+                          </div>
                         </td>
                       );
                     }
@@ -1372,45 +1377,48 @@ export function LibraryAssetsTable({
                         className={styles.cell}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                       >
-                        <Checkbox
-                          checked={checked}
-                          onChange={async (e) => {
-                            const newValue = e.target.checked;
-                            
-                            // Optimistic update: immediately update UI
-                            setOptimisticBooleanValues(prev => ({
-                              ...prev,
-                              [optimisticKey]: newValue
-                            }));
-                            
-                            // Update the row data in background
-                            if (onUpdateAsset) {
-                              try {
-                                const updatedPropertyValues = {
-                                  ...row.propertyValues,
-                                  [property.key]: newValue
-                                };
-                                await onUpdateAsset(row.id, row.name, updatedPropertyValues);
-                                
-                                // Remove optimistic value after successful update
-                                // The component will re-render with new props from parent
-                                setOptimisticBooleanValues(prev => {
-                                  const next = { ...prev };
-                                  delete next[optimisticKey];
-                                  return next;
-                                });
-                              } catch (error) {
-                                // On error, revert optimistic update
-                                setOptimisticBooleanValues(prev => {
-                                  const next = { ...prev };
-                                  delete next[optimisticKey];
-                                  return next;
-                                });
-                                console.error('Failed to update boolean value:', error);
+                        <div className={styles.booleanToggle}>
+                          <Switch
+                            checked={checked}
+                            onChange={async (newValue) => {
+                              // Optimistic update: immediately update UI
+                              setOptimisticBooleanValues(prev => ({
+                                ...prev,
+                                [optimisticKey]: newValue
+                              }));
+                              
+                              // Update the row data in background
+                              if (onUpdateAsset) {
+                                try {
+                                  const updatedPropertyValues = {
+                                    ...row.propertyValues,
+                                    [property.key]: newValue
+                                  };
+                                  await onUpdateAsset(row.id, row.name, updatedPropertyValues);
+                                  
+                                  // Remove optimistic value after successful update
+                                  // The component will re-render with new props from parent
+                                  setOptimisticBooleanValues(prev => {
+                                    const next = { ...prev };
+                                    delete next[optimisticKey];
+                                    return next;
+                                  });
+                                } catch (error) {
+                                  // On error, revert optimistic update
+                                  setOptimisticBooleanValues(prev => {
+                                    const next = { ...prev };
+                                    delete next[optimisticKey];
+                                    return next;
+                                  });
+                                  console.error('Failed to update boolean value:', error);
+                                }
                               }
-                            }
-                          }}
-                        />
+                            }}
+                          />
+                          <span className={styles.booleanLabel}>
+                            {checked ? 'True' : 'False'}
+                          </span>
+                        </div>
                       </td>
                     );
                   }
@@ -1616,11 +1624,16 @@ export function LibraryAssetsTable({
                   
                   return (
                     <td key={property.id} className={styles.editCell}>
-                      <Checkbox
-                        checked={checked}
-                        onChange={(e) => handleInputChange(property.key, e.target.checked)}
-                        disabled={isSaving}
-                      />
+                      <div className={styles.booleanToggle}>
+                        <Switch
+                          checked={checked}
+                          onChange={(checked) => handleInputChange(property.key, checked)}
+                          disabled={isSaving}
+                        />
+                        <span className={styles.booleanLabel}>
+                          {checked ? 'True' : 'False'}
+                        </span>
+                      </div>
                     </td>
                   );
                 }
