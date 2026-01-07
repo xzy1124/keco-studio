@@ -33,11 +33,11 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    # Install Supabase CLI
-    - name: Install Supabase CLI
-      run: |
-        npm install -g supabase@latest
-        supabase --version
+    # Install Supabase CLI using official method
+    - name: Setup Supabase CLI
+      uses: supabase/setup-cli@v1
+      with:
+        version: latest
     
     # Stop Supabase if running (cleanup from previous runs)
     - name: Stop Supabase (if running)
