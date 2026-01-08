@@ -61,7 +61,8 @@ export function getBucketName(): string {
   return DEFAULT_BUCKET;
 }
 
-export function isImageFile(fileType: string): boolean {
+export function isImageFile(fileType: string | undefined | null): boolean {
+  if (!fileType) return false;
   return fileType.startsWith('image/');
 }
 
@@ -163,7 +164,9 @@ export function getFileExtension(fileName: string): string {
   return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
 }
 
-export function getFileIcon(fileType: string): string {
+export function getFileIcon(fileType: string | undefined | null): string {
+  if (!fileType) return '📎';
+  
   if (isImageFile(fileType)) {
     return '🖼️';
   }
