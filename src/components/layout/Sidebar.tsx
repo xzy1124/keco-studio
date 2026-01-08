@@ -25,6 +25,7 @@ import { DataNode, EventDataNode } from "antd/es/tree";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSupabase } from "@/lib/SupabaseContext";
 import { NewProjectModal } from "@/components/projects/NewProjectModal";
+import { EditProjectModal } from "@/components/projects/EditProjectModal";
 import { NewLibraryModal } from "@/components/libraries/NewLibraryModal";
 import { NewFolderModal } from "@/components/folders/NewFolderModal";
 import { AddLibraryMenu } from "@/components/libraries/AddLibraryMenu";
@@ -153,6 +154,8 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   const [assets, setAssets] = useState<Record<string, AssetRow[]>>({});
 
   const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showEditProjectModal, setShowEditProjectModal] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -270,10 +273,20 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     };
 
+    const handleProjectUpdated = (event: CustomEvent) => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      // Also invalidate the specific project cache if projectId is provided
+      if (event.detail?.projectId) {
+        queryClient.invalidateQueries({ queryKey: ['project', event.detail.projectId] });
+      }
+    };
+
     window.addEventListener('projectCreated' as any, handleProjectCreated as EventListener);
+    window.addEventListener('projectUpdated' as any, handleProjectUpdated as EventListener);
     
     return () => {
       window.removeEventListener('projectCreated' as any, handleProjectCreated as EventListener);
+      window.removeEventListener('projectUpdated' as any, handleProjectUpdated as EventListener);
     };
   }, [queryClient]);
 
@@ -1064,10 +1077,18 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   const handleContextMenuAction = (action: ContextMenuAction) => {
     if (!contextMenu) return;
     
-    // TODO: Implement actions
-    // console.log(`Action: ${action} on ${contextMenu.type} with id: ${contextMenu.id}`);
+    // Handle rename action (Project info / Library info)
+    if (action === 'rename') {
+      if (contextMenu.type === 'project') {
+        setEditingProjectId(contextMenu.id);
+        setShowEditProjectModal(true);
+        setContextMenu(null);
+        return;
+      }
+      // TODO: Handle library rename in the future
+    }
     
-    // For now, only handle delete action
+    // Handle delete action
     if (action === 'delete') {
       if (contextMenu.type === 'project') {
         if (window.confirm('Delete this project? All libraries under it will be removed.')) {
@@ -1586,6 +1607,20 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         onClose={() => setShowProjectModal(false)}
         onCreated={handleProjectCreated}
       />
+
+      {editingProjectId && (
+        <EditProjectModal
+          open={showEditProjectModal}
+          projectId={editingProjectId}
+          onClose={() => {
+            setShowEditProjectModal(false);
+            setEditingProjectId(null);
+          }}
+          onUpdated={() => {
+            // Cache will be invalidated by the projectUpdated event listener
+          }}
+        />
+      )}
 
       <NewLibraryModal
         open={showLibraryModal}
