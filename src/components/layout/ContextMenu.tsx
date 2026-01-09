@@ -17,9 +17,10 @@ type ContextMenuProps = {
   y: number;
   onClose: () => void;
   onAction?: (action: ContextMenuAction) => void;
+  type?: 'project' | 'library' | 'folder' | 'asset';
 };
 
-export function ContextMenu({ x, y, onClose, onAction }: ContextMenuProps) {
+export function ContextMenu({ x, y, onClose, onAction, type }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -87,7 +88,7 @@ export function ContextMenu({ x, y, onClose, onAction }: ContextMenuProps) {
         className={styles.menuItem}
         onClick={() => handleAction('rename')}
       >
-        Rename
+        {type === 'project' ? 'Project info' : type === 'library' ? 'Library info' : 'Rename'}
       </button>
       <button
         className={styles.menuItem}
