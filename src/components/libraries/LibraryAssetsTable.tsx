@@ -26,6 +26,7 @@ import noassetIcon1 from '@/app/assets/images/NoassetIcon1.svg';
 import noassetIcon2 from '@/app/assets/images/NoassetIcon2.svg';
 import libraryAssetTableAddIcon from '@/app/assets/images/LibraryAssetTableAddIcon.svg';
 import libraryAssetTableSelectIcon from '@/app/assets/images/LibraryAssetTableSelectIcon.svg';
+import batchEditAddIcon from '@/app/assets/images/BatchEditAddIcon.svg';
 import styles from './LibraryAssetsTable.module.css';
 
 export type LibraryAssetsTableProps = {
@@ -216,9 +217,17 @@ export function LibraryAssetsTable({
   // Asset names cache for display
   const [assetNamesCache, setAssetNamesCache] = useState<Record<string, string>>({});
 
-  // Row selection state
+  // Row selection state (for checkbox selection)
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+  
+  // Cell selection state (for drag selection)
+  type CellKey = `${string}-${string}`; // Format: "rowId-propertyKey"
+  const [selectedCells, setSelectedCells] = useState<Set<CellKey>>(new Set());
+  const [dragStartCell, setDragStartCell] = useState<{ rowId: string; propertyKey: string } | null>(null);
+  const [dragCurrentCell, setDragCurrentCell] = useState<{ rowId: string; propertyKey: string } | null>(null);
+  const isDraggingCellsRef = useRef(false);
+  const dragCurrentCellRef = useRef<{ rowId: string; propertyKey: string } | null>(null);
 
   // Hover state for asset card
   const [hoveredAssetId, setHoveredAssetId] = useState<string | null>(null);
@@ -1075,6 +1084,44 @@ export function LibraryAssetsTable({
     }
   };
 
+  // Calculate ordered properties early (needed for cell selection)
+  const { groups, orderedProperties } = useMemo(() => {
+    const byId = new Map<string, SectionConfig>();
+    sections.forEach((s) => byId.set(s.id, s));
+
+    const groupMap = new Map<
+      string,
+      {
+        section: SectionConfig;
+        properties: PropertyConfig[];
+      }
+    >();
+
+    for (const prop of properties) {
+      const section = byId.get(prop.sectionId);
+      if (!section) continue;
+
+      let group = groupMap.get(section.id);
+      if (!group) {
+        group = { section, properties: [] };
+        groupMap.set(section.id, group);
+      }
+      group.properties.push(prop);
+    }
+
+    const groups = Array.from(groupMap.values()).sort(
+      (a, b) => a.section.orderIndex - b.section.orderIndex
+    );
+
+    groups.forEach((g) => {
+      g.properties.sort((a, b) => a.orderIndex - b.orderIndex);
+    });
+
+    const orderedProperties = groups.flatMap((g) => g.properties);
+
+    return { groups, orderedProperties };
+  }, [sections, properties]);
+
   // Handle navigate to predefine page
   const handlePredefineClick = () => {
     const projectId = params.projectId as string;
@@ -1097,6 +1144,209 @@ export function LibraryAssetsTable({
       return next;
     });
   };
+
+  // Get all rows for cell selection (helper function)
+  const getAllRowsForCellSelection = useCallback(() => {
+    const allRowsForSelection = rows
+      .filter((row): row is AssetRow => !deletedAssetIds.has(row.id))
+      .map((row): AssetRow => {
+        const assetRow = row as AssetRow;
+        const optimisticUpdate = optimisticEditUpdates.get(assetRow.id);
+        if (optimisticUpdate && optimisticUpdate.name === assetRow.name) {
+          return {
+            ...assetRow,
+            name: optimisticUpdate.name,
+            propertyValues: { ...assetRow.propertyValues, ...optimisticUpdate.propertyValues }
+          };
+        }
+        return assetRow;
+      });
+    
+    const optimisticAssets: AssetRow[] = Array.from(optimisticNewAssets.values());
+    allRowsForSelection.push(...optimisticAssets);
+    
+    return allRowsForSelection;
+  }, [rows, deletedAssetIds, optimisticEditUpdates, optimisticNewAssets]);
+
+  // Handle cell click (select single cell)
+  const handleCellClick = (rowId: string, propertyKey: string, e: React.MouseEvent) => {
+    // Don't select if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || 
+        target.closest('.ant-checkbox') || 
+        target.closest('.ant-select') ||
+        target.closest('.ant-switch') ||
+        target.closest('input') ||
+        target.closest('select') ||
+        target.closest('.cellExpandIcon')) {
+      return;
+    }
+    
+    e.stopPropagation();
+    
+    // Select single cell
+    const cellKey: CellKey = `${rowId}-${propertyKey}` as CellKey;
+    setSelectedCells(new Set<CellKey>([cellKey]));
+    setDragStartCell({ rowId, propertyKey });
+    setDragCurrentCell(null);
+  };
+
+  // Handle cell drag selection start (from expand icon)
+  const handleCellDragStart = (rowId: string, propertyKey: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    isDraggingCellsRef.current = true;
+    const startCell = { rowId, propertyKey };
+    setDragStartCell(startCell);
+    setDragCurrentCell(startCell);
+    dragCurrentCellRef.current = startCell;
+    
+    // Create handlers for drag move and end
+    const dragMoveHandler = (moveEvent: MouseEvent) => {
+      if (!isDraggingCellsRef.current) return;
+      
+      // Use the captured values from closure
+      const startRowId = rowId;
+      const startPropertyKey = propertyKey;
+      
+      // Find the cell under the cursor
+      const elementBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      if (!elementBelow) return;
+      
+      const cellElement = elementBelow.closest('td');
+      if (!cellElement) return;
+      
+      // Get row and property info from data attributes
+      const rowElement = cellElement.closest('tr');
+      if (!rowElement || 
+          rowElement.classList.contains('headerRowTop') || 
+          rowElement.classList.contains('headerRowBottom') || 
+          rowElement.classList.contains('editRow') ||
+          rowElement.classList.contains('addRow')) {
+        return;
+      }
+      
+      const currentRowId = rowElement.getAttribute('data-row-id');
+      const currentPropertyKey = cellElement.getAttribute('data-property-key');
+      
+      if (currentRowId && currentPropertyKey) {
+        const newCell = { rowId: currentRowId, propertyKey: currentPropertyKey };
+        dragCurrentCellRef.current = newCell;
+        setDragCurrentCell(newCell);
+      }
+    };
+    
+    const dragEndHandler = (endEvent: MouseEvent) => {
+      if (!isDraggingCellsRef.current) {
+        return;
+      }
+      
+      isDraggingCellsRef.current = false;
+      document.removeEventListener('mousemove', dragMoveHandler);
+      document.removeEventListener('mouseup', dragEndHandler);
+      document.body.style.userSelect = '';
+      
+      // Get all rows and properties for selection
+      const allRowsForSelection = getAllRowsForCellSelection();
+      // Use captured values from closure
+      const startRowId = rowId;
+      const startPropertyKey = propertyKey;
+      // Get current end from ref (updated by dragMoveHandler)
+      const endCell = dragCurrentCellRef.current || { rowId: startRowId, propertyKey: startPropertyKey };
+      const endRowId = endCell.rowId;
+      const endPropertyKey = endCell.propertyKey;
+      
+      // Find start and end indices
+      const startRowIndex = allRowsForSelection.findIndex(r => r.id === startRowId);
+      const endRowIndex = allRowsForSelection.findIndex(r => r.id === endRowId);
+      
+      // Find property indices in orderedProperties
+      const startPropertyIndex = orderedProperties.findIndex(p => p.key === startPropertyKey);
+      const endPropertyIndex = orderedProperties.findIndex(p => p.key === endPropertyKey);
+      
+      if (startRowIndex !== -1 && endRowIndex !== -1 && 
+          startPropertyIndex !== -1 && endPropertyIndex !== -1) {
+        // Select all cells in the rectangle
+        const rowStart = Math.min(startRowIndex, endRowIndex);
+        const rowEnd = Math.max(startRowIndex, endRowIndex);
+        const propStart = Math.min(startPropertyIndex, endPropertyIndex);
+        const propEnd = Math.max(startPropertyIndex, endPropertyIndex);
+        
+        const cellsToSelect = new Set<CellKey>();
+        
+        for (let r = rowStart; r <= rowEnd; r++) {
+          const row = allRowsForSelection[r];
+          for (let p = propStart; p <= propEnd; p++) {
+            const property = orderedProperties[p];
+            cellsToSelect.add(`${row.id}-${property.key}`);
+          }
+        }
+        
+        setSelectedCells(cellsToSelect);
+      } else {
+        // Fallback: just select the start cell
+        setSelectedCells(new Set<CellKey>([`${startRowId}-${startPropertyKey}` as CellKey]));
+      }
+      
+      setDragStartCell(null);
+      setDragCurrentCell(null);
+      dragCurrentCellRef.current = null;
+    };
+    
+    // Add event listeners
+    document.addEventListener('mousemove', dragMoveHandler);
+    document.addEventListener('mouseup', dragEndHandler);
+    
+    // Prevent text selection during drag
+    document.body.style.userSelect = 'none';
+  };
+
+  // Update selected cells during drag (for visual feedback)
+  useEffect(() => {
+    if (!isDraggingCellsRef.current || !dragStartCell || !dragCurrentCell) {
+      return;
+    }
+    
+    const allRowsForSelection = getAllRowsForCellSelection();
+    const startRowId = dragStartCell.rowId;
+    const startPropertyKey = dragStartCell.propertyKey;
+    const endRowId = dragCurrentCell.rowId;
+    const endPropertyKey = dragCurrentCell.propertyKey;
+    
+    // Find indices
+    const startRowIndex = allRowsForSelection.findIndex(r => r.id === startRowId);
+    const endRowIndex = allRowsForSelection.findIndex(r => r.id === endRowId);
+    const startPropertyIndex = orderedProperties.findIndex(p => p.key === startPropertyKey);
+    const endPropertyIndex = orderedProperties.findIndex(p => p.key === endPropertyKey);
+    
+    if (startRowIndex !== -1 && endRowIndex !== -1 && 
+        startPropertyIndex !== -1 && endPropertyIndex !== -1) {
+      const rowStart = Math.min(startRowIndex, endRowIndex);
+      const rowEnd = Math.max(startRowIndex, endRowIndex);
+      const propStart = Math.min(startPropertyIndex, endPropertyIndex);
+      const propEnd = Math.max(startPropertyIndex, endPropertyIndex);
+      
+      const cellsToSelect = new Set<CellKey>();
+      
+      for (let r = rowStart; r <= rowEnd; r++) {
+        const row = allRowsForSelection[r];
+        for (let p = propStart; p <= propEnd; p++) {
+          const property = orderedProperties[p];
+          cellsToSelect.add(`${row.id}-${property.key}`);
+        }
+      }
+      
+      setSelectedCells(cellsToSelect);
+    }
+  }, [dragStartCell, dragCurrentCell, getAllRowsForCellSelection, orderedProperties]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.userSelect = '';
+    };
+  }, []);
 
   // Handle right-click context menu
   const handleRowContextMenu = (e: React.MouseEvent, row: AssetRow) => {
@@ -1191,44 +1441,6 @@ export function LibraryAssetsTable({
     );
   }
 
-  const grouped = (() => {
-    const byId = new Map<string, SectionConfig>();
-    sections.forEach((s) => byId.set(s.id, s));
-
-    const groupMap = new Map<
-      string,
-      {
-        section: SectionConfig;
-        properties: PropertyConfig[];
-      }
-    >();
-
-    for (const prop of properties) {
-      const section = byId.get(prop.sectionId);
-      if (!section) continue;
-
-      let group = groupMap.get(section.id);
-      if (!group) {
-        group = { section, properties: [] };
-        groupMap.set(section.id, group);
-      }
-      group.properties.push(prop);
-    }
-
-    const groups = Array.from(groupMap.values()).sort(
-      (a, b) => a.section.orderIndex - b.section.orderIndex
-    );
-
-    groups.forEach((g) => {
-      g.properties.sort((a, b) => a.orderIndex - b.orderIndex);
-    });
-
-    const orderedProperties = groups.flatMap((g) => g.properties);
-
-    return { groups, orderedProperties };
-  })();
-
-  const { groups, orderedProperties } = grouped;
 
   // Calculate total columns: # + properties (no actions column)
   const totalColumns = 1 + orderedProperties.length;
@@ -1461,6 +1673,7 @@ export function LibraryAssetsTable({
             return (
               <tr
                 key={row.id}
+                data-row-id={row.id}
                 className={`${styles.row} ${isRowSelected ? styles.rowSelected : ''}`}
                 onContextMenu={(e) => handleRowContextMenu(e, row)}
                 onMouseEnter={() => setHoveredRowId(row.id)}
@@ -1493,11 +1706,17 @@ export function LibraryAssetsTable({
                     const value = row.propertyValues[property.key];
                     const assetId = value ? String(value) : null;
                     
+                      const cellKey: CellKey = `${row.id}-${property.key}`;
+                      const isCellSelected = selectedCells.has(cellKey);
+                      const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                      
                       return (
                         <td
                           key={property.id}
-                          className={styles.cell}
+                          data-property-key={property.key}
+                          className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''}`}
                           onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                          onClick={(e) => handleCellClick(row.id, property.key, e)}
                         >
                           <ReferenceField
                             property={property}
@@ -1508,6 +1727,21 @@ export function LibraryAssetsTable({
                             onAvatarMouseLeave={handleAvatarMouseLeave}
                             onOpenReferenceModal={handleOpenReferenceModal}
                           />
+                          {showExpandIcon && (
+                            <div
+                              className={styles.cellExpandIcon}
+                              onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                              title="拖拽扩展选择"
+                            >
+                              <Image
+                                src={batchEditAddIcon}
+                                alt="扩展选择"
+                                width={18}
+                                height={18}
+                                style={{ pointerEvents: 'none' }}
+                              />
+                            </div>
+                          )}
                         </td>
                       );
                   }
@@ -1531,11 +1765,17 @@ export function LibraryAssetsTable({
                       }
                     }
                     
+                    const cellKey: CellKey = `${row.id}-${property.key}`;
+                    const isCellSelected = selectedCells.has(cellKey);
+                    const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                    
                     return (
                       <td
                         key={property.id}
-                        className={styles.cell}
+                        data-property-key={property.key}
+                        className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                        onClick={(e) => handleCellClick(row.id, property.key, e)}
                       >
                         {mediaValue ? (
                           <div className={styles.mediaCellContent}>
@@ -1572,6 +1812,21 @@ export function LibraryAssetsTable({
                         ) : (
                           <span className={styles.placeholderValue}>—</span>
                         )}
+                        {showExpandIcon && (
+                          <div
+                            className={styles.cellExpandIcon}
+                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                            title="拖拽扩展选择"
+                          >
+                            <Image
+                              src={batchEditAddIcon}
+                              alt="扩展选择"
+                              width={18}
+                              height={18}
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          </div>
+                        )}
                       </td>
                     );
                   }
@@ -1588,11 +1843,17 @@ export function LibraryAssetsTable({
                     
                     const checked = value === true || value === 'true' || String(value).toLowerCase() === 'true';
                     
+                    const cellKey: CellKey = `${row.id}-${property.key}`;
+                    const isCellSelected = selectedCells.has(cellKey);
+                    const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                    
                     return (
                       <td
                         key={property.id}
-                        className={styles.cell}
+                        data-property-key={property.key}
+                        className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                        onClick={(e) => handleCellClick(row.id, property.key, e)}
                       >
                         <div className={styles.booleanToggle}>
                           <Switch
@@ -1636,6 +1897,21 @@ export function LibraryAssetsTable({
                             {checked ? 'True' : 'False'}
                           </span>
                         </div>
+                        {showExpandIcon && (
+                          <div
+                            className={styles.cellExpandIcon}
+                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                            title="拖拽扩展选择"
+                          >
+                            <Image
+                              src={batchEditAddIcon}
+                              alt="扩展选择"
+                              width={18}
+                              height={18}
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          </div>
+                        )}
                       </td>
                     );
                   }
@@ -1653,11 +1929,17 @@ export function LibraryAssetsTable({
                     const display = value !== null && value !== undefined && value !== '' ? String(value) : null;
                     const isOpen = openEnumSelects[enumSelectKey] || false;
                     
+                    const cellKey: CellKey = `${row.id}-${property.key}`;
+                    const isCellSelected = selectedCells.has(cellKey);
+                    const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                    
                     return (
                       <td
                         key={property.id}
-                        className={styles.cell}
+                        data-property-key={property.key}
+                        className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                        onClick={(e) => handleCellClick(row.id, property.key, e)}
                       >
                         <div className={styles.enumSelectWrapper}>
                           <Select
@@ -1736,6 +2018,21 @@ export function LibraryAssetsTable({
                             }}
                           />
                         </div>
+                        {showExpandIcon && (
+                          <div
+                            className={styles.cellExpandIcon}
+                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                            title="拖拽扩展选择"
+                          >
+                            <Image
+                              src={batchEditAddIcon}
+                              alt="扩展选择"
+                              width={18}
+                              height={18}
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          </div>
+                        )}
                       </td>
                     );
                   }
@@ -1752,11 +2049,18 @@ export function LibraryAssetsTable({
                     display = String(value);
                   }
 
+                  const cellKey: CellKey = `${row.id}-${property.key}`;
+                  const isCellSelected = selectedCells.has(cellKey);
+                  // Only show expand icon when exactly one cell is selected and this cell is selected
+                  const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                  
                   return (
                     <td
                       key={property.id}
-                      className={styles.cell}
+                      data-property-key={property.key}
+                      className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''}`}
                       onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                      onClick={(e) => handleCellClick(row.id, property.key, e)}
                     >
                       {isNameField ? (
                         // Name field: show text + view detail button
@@ -1786,9 +2090,24 @@ export function LibraryAssetsTable({
                         </div>
                       ) : (
                         // Other fields: show text with ellipsis for long content
-                        <span className={styles.cellText}>
+                        <span className={styles.cellText} title={display || ''}>
                           {display ? display : <span className={styles.placeholderValue}>—</span>}
                         </span>
+                      )}
+                      {showExpandIcon && (
+                        <div
+                          className={styles.cellExpandIcon}
+                          onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                          title="拖拽扩展选择"
+                        >
+                          <Image
+                            src={batchEditAddIcon}
+                            alt="扩展选择"
+                            width={18}
+                            height={18}
+                            style={{ pointerEvents: 'none' }}
+                          />
+                        </div>
                       )}
                     </td>
                   );

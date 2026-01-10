@@ -94,7 +94,7 @@
   font-size: 13px;
   line-height: 1.5;
   color: #111827;
-  overflow: hidden;
+  overflow: hidden; /* Keep hidden for text overflow, but allow absolute positioned icon */
   cursor: pointer;
   transition: background-color 0.15s ease;
   border-right: 1px solid #e2e8f0;
@@ -104,6 +104,50 @@
 
 .cell:hover {
   background-color: #f9fafb;
+}
+
+.cellSelected {
+  background-color: rgba(94, 0, 255, 0.1) !important;
+  border: 1px solid rgba(94, 0, 255, 0.3) !important;
+  position: relative;
+  z-index: 1;
+}
+
+.cellSelected:hover {
+  background-color: rgba(94, 0, 255, 0.12) !important;
+}
+
+/* Ensure selected cells have proper border during drag */
+.cellSelected:not(:first-child) {
+  border-left: 1px solid rgba(94, 0, 255, 0.3) !important;
+}
+
+/* Expand icon for cell selection */
+.cellExpandIcon {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  cursor: crosshair;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(94, 0, 255, 0.1);
+  border: 1px solid rgba(94, 0, 255, 0.3);
+  border-radius: 2px 0 0 0;
+  transition: background-color 0.15s ease;
+  pointer-events: auto;
+}
+
+.cellExpandIcon:hover {
+  background-color: rgba(94, 0, 255, 0.15);
+  border-color: rgba(94, 0, 255, 0.5);
+}
+
+.cellExpandIcon:active {
+  background-color: rgba(94, 0, 255, 0.2);
 }
 
 /* Cell content with view button */
