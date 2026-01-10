@@ -5,16 +5,12 @@ on:
     branches:
       - main      
       - master
-      - 'release/**'
-      - 'preview/**'   # 
     tags:
-      - 'v*'  # 支持 v1.0.0, v0.1.0 等格式的 tag
+      - 'v*'  # Tag 推送触发 Preview 环境部署，用于 release 版本测试
   pull_request:
     branches:
       - main
       - master
-      - 'release/**'
-      - 'preview/**'   # 
     types: [opened, synchronize, reopened]  
 
 jobs:
@@ -66,7 +62,8 @@ jobs:
       - name: Install Supabase CLI
         run: npm install -g supabase@latest
 
-      # 根据分支选择 Supabase 项目和对应的 Access Token
+      # 根据分支/Tag 选择 Supabase 项目和对应的 Access Token
+      # main 分支 → Production, Tag 推送 → Preview
       - name: Select Supabase Project and Token
         id: select-project
         env:
@@ -74,7 +71,8 @@ jobs:
           PREVIEW_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN_PREVIEW }}
           GENERAL_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/master" ]] || [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
+            # main 分支使用 Production 环境
             echo "project-ref=${{ secrets.SUPABASE_PROJECT_REF_PROD }}" >> $GITHUB_OUTPUT
             echo "environment=production" >> $GITHUB_OUTPUT
             # 如果配置了单独的 Production Token，使用它；否则使用通用的 Token
@@ -85,10 +83,22 @@ jobs:
               echo "access-token=$GENERAL_TOKEN" >> $GITHUB_OUTPUT
               echo "✅ 使用 Production Supabase 项目 (通用 Token)"
             fi
-          else
+          elif [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+            # Tag 推送使用 Preview 环境（用于 release 版本测试）
             echo "project-ref=${{ secrets.SUPABASE_PROJECT_REF_PREVIEW }}" >> $GITHUB_OUTPUT
             echo "environment=preview" >> $GITHUB_OUTPUT
             # 如果配置了单独的 Preview Token，使用它；否则使用通用的 Token
+            if [ -n "$PREVIEW_TOKEN" ] && [ "$PREVIEW_TOKEN" != "" ]; then
+              echo "access-token=$PREVIEW_TOKEN" >> $GITHUB_OUTPUT
+              echo "✅ 使用 Preview Supabase 项目 (Tag 触发, 单独 Token)"
+            else
+              echo "access-token=$GENERAL_TOKEN" >> $GITHUB_OUTPUT
+              echo "✅ 使用 Preview Supabase 项目 (Tag 触发, 通用 Token)"
+            fi
+          else
+            # 其他情况（PR 等）使用 Preview 环境
+            echo "project-ref=${{ secrets.SUPABASE_PROJECT_REF_PREVIEW }}" >> $GITHUB_OUTPUT
+            echo "environment=preview" >> $GITHUB_OUTPUT
             if [ -n "$PREVIEW_TOKEN" ] && [ "$PREVIEW_TOKEN" != "" ]; then
               echo "access-token=$PREVIEW_TOKEN" >> $GITHUB_OUTPUT
               echo "✅ 使用 Preview Supabase 项目 (单独 Token)"
@@ -136,33 +146,35 @@ jobs:
         run: npm ci
 
       - name: Run linter
-        # 修复 Next.js 16 lint 路径问题：使用 npx 并确保在项目根目录
-        run: |
-          echo "Working directory: $(pwd)"
-          echo "Node version: $(node --version)"
-          echo "NPM version: $(npm --version)"
-          # 使用 npx 运行 next lint，确保使用本地安装的版本
-          npx --yes next lint || echo "⚠️ Lint check completed with issues, continuing deployment..."
+        run: npm run lint
         continue-on-error: true  
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      # Determine deployment environment based on branch
+      # Determine deployment environment based on branch/tag
+      # main 分支 → Production, Tag 推送 → Preview (用于 release 版本测试)
       - name: Determine deployment environment
         id: env
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/master" ]] || [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
             echo "environment=production" >> $GITHUB_OUTPUT
             echo "is_prod=true" >> $GITHUB_OUTPUT
-            echo "✅ 部署到 Production 环境"
-          elif [[ "${{ github.ref }}" =~ ^refs/heads/release/ ]]; then
+            echo "deployment_target=production" >> $GITHUB_OUTPUT
+            echo "✅ 部署到 Production 环境 (main 分支)"
+          elif [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+            # Tag 推送部署到 Preview 环境，用于 release 版本的产品测试
             echo "environment=preview" >> $GITHUB_OUTPUT
             echo "is_prod=false" >> $GITHUB_OUTPUT
-            echo "✅ 部署到 Preview 环境 (Release 分支)"
+            echo "deployment_target=preview" >> $GITHUB_OUTPUT
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+            echo "✅ 部署到 Preview 环境 (Tag: $TAG_NAME)"
           else
+            # PR 等其他情况部署到 Preview
             echo "environment=preview" >> $GITHUB_OUTPUT
             echo "is_prod=false" >> $GITHUB_OUTPUT
+            echo "deployment_target=preview" >> $GITHUB_OUTPUT
             echo "✅ 部署到 Preview 环境"
           fi
 
@@ -189,9 +201,22 @@ jobs:
       - name: Deploy Project Artifacts to Vercel
         run: |
           if [[ "${{ steps.env.outputs.is_prod }}" == "true" ]]; then
+            # Production 部署（main 分支）
+            echo "🚀 部署到 Production 环境..."
             vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+          elif [[ "${{ steps.env.outputs.deployment_target }}" == "preview" ]] && [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+            # Preview 部署（Tag 推送）- 部署到 Preview 环境并使用固定域名
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            echo "🚀 部署到 Preview 环境 (Tag: $TAG_NAME)..."
+            # 部署到 Preview 环境，并使用固定的 Preview 域名作为 alias
+            # 注意：keco-release.vercel.app 需要在 Vercel Dashboard 中配置为项目域名
+            vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} --env=${{ steps.env.outputs.environment }} --alias=keco-release.vercel.app
+            echo "✅ Preview 部署完成，Tag: $TAG_NAME"
+            echo "🌐 Preview URL: https://keco-release.vercel.app"
           else
-            vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+            # 其他 Preview 部署（PR 等）
+            echo "🚀 部署到 Preview 环境..."
+            vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} --env=${{ steps.env.outputs.environment }}
           fi
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
