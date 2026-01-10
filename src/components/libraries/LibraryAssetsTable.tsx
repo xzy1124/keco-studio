@@ -1737,6 +1737,193 @@ export function LibraryAssetsTable({
     }, 2000);
   }, [selectedCells, getAllRowsForCellSelection, orderedProperties]);
 
+  // Handle Copy operation
+  const handleCopy = useCallback(() => {
+    console.log('handleCopy called, selectedCells:', selectedCells);
+    
+    if (selectedCells.size === 0) {
+      console.log('No cells selected');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Get all rows for selection
+    const allRowsForSelection = getAllRowsForCellSelection();
+    console.log('allRowsForSelection:', allRowsForSelection.length, 'rows');
+    console.log('orderedProperties:', orderedProperties.length, 'properties');
+    
+    // Group selected cells by row to build a 2D array
+    const cellsByRow = new Map<string, Array<{ propertyKey: string; rowId: string; value: string | number | null }>>();
+    const validCells: CellKey[] = [];
+
+    // Check each selected cell and validate data type
+    selectedCells.forEach((cellKey) => {
+      // cellKey format: "${row.id}-${property.key}"
+      // Both row.id and property.key can be UUIDs containing multiple '-'
+      // Strategy: try matching each property.key from the end of cellKey
+      let rowId = '';
+      let propertyKey = '';
+      let foundProperty = null;
+      
+      // Try each property.key to find a match (starting from the end)
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          // Found a match: cellKey ends with "-{property.key}"
+          rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+          propertyKey = property.key;
+          foundProperty = property;
+          break;
+        }
+      }
+      
+      if (!foundProperty) {
+        console.log('Could not find matching property for cellKey:', cellKey);
+        console.log('Available property keys with dataTypes:', orderedProperties.map(p => `${p.key} (${p.dataType || 'undefined'})`));
+        return;
+      }
+      
+      console.log('Processing cell - rowId:', rowId, 'propertyKey:', propertyKey);
+      console.log('Property found:', foundProperty.key, 'dataType (from predefine):', foundProperty.dataType);
+      
+      // Check if data type is supported (string, int, float)
+      // Note: dataType is defined during predefine (预定义时定义), we check the predefine type, not dynamic validation
+      if (!foundProperty.dataType) {
+        console.log('Property has no dataType defined in predefine, skipping');
+        return;
+      }
+      
+      const supportedTypes = ['string', 'int', 'float'];
+      if (!supportedTypes.includes(foundProperty.dataType)) {
+        console.log('Unsupported data type (from predefine):', foundProperty.dataType, '- only string/int/float are supported for cut/copy/paste');
+        return; // Skip unsupported types
+      }
+      
+      // Find the row
+      const row = allRowsForSelection.find(r => r.id === rowId);
+      if (!row) {
+        console.log('Row not found:', rowId);
+        return;
+      }
+      
+      // Get the cell value
+      let rawValue = row.propertyValues[propertyKey];
+      let value: string | number | null = null;
+      
+      // Convert to appropriate type based on property data type
+      if (rawValue !== null && rawValue !== undefined && rawValue !== '') {
+        if (foundProperty.dataType === 'int') {
+          const numValue = parseInt(String(rawValue), 10);
+          value = isNaN(numValue) ? null : numValue;
+        } else if (foundProperty.dataType === 'float') {
+          const numValue = parseFloat(String(rawValue));
+          value = isNaN(numValue) ? null : numValue;
+        } else if (foundProperty.dataType === 'string') {
+          value = String(rawValue);
+        }
+      }
+      
+      console.log('Cell value:', value);
+      
+      if (!cellsByRow.has(rowId)) {
+        cellsByRow.set(rowId, []);
+      }
+      cellsByRow.get(rowId)!.push({ propertyKey, rowId, value });
+      validCells.push(cellKey);
+    });
+
+    console.log('Valid cells found:', validCells.length);
+
+    if (validCells.length === 0) {
+      console.log('No valid cells to copy - no supported data types found');
+      // Still show feedback even if no valid cells
+      setToastMessage('No cells with supported types (string, int, float) selected');
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2000);
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Build 2D array (rows x columns) for clipboard
+    // Find the range of rows and columns
+    const rowIds = Array.from(cellsByRow.keys());
+    const propertyKeys = new Set<string>();
+    validCells.forEach(cellKey => {
+      // Find property key using the same method as above (match from end)
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          propertyKeys.add(property.key);
+          break;
+        }
+      }
+    });
+    
+    // Sort rows by their index in allRowsForSelection
+    rowIds.sort((a, b) => {
+      const indexA = allRowsForSelection.findIndex(r => r.id === a);
+      const indexB = allRowsForSelection.findIndex(r => r.id === b);
+      return indexA - indexB;
+    });
+    
+    // Sort properties by their index in orderedProperties
+    const sortedPropertyKeys = Array.from(propertyKeys).sort((a, b) => {
+      const indexA = orderedProperties.findIndex(p => p.key === a);
+      const indexB = orderedProperties.findIndex(p => p.key === b);
+      return indexA - indexB;
+    });
+    
+    // Build 2D array
+    const clipboardArray: Array<Array<string | number | null>> = [];
+    rowIds.forEach(rowId => {
+      const row = allRowsForSelection.find(r => r.id === rowId);
+      if (!row) return;
+      
+      const rowData: Array<string | number | null> = [];
+      sortedPropertyKeys.forEach(propertyKey => {
+        const cell = cellsByRow.get(rowId)?.find(c => c.propertyKey === propertyKey);
+        rowData.push(cell?.value ?? null);
+      });
+      clipboardArray.push(rowData);
+    });
+    
+    // Copy to clipboard (as tab-separated values for Excel-like behavior)
+    const clipboardText = clipboardArray
+      .map(row => row.map(cell => cell === null ? '' : String(cell)).join('\t'))
+      .join('\n');
+    
+    // Try to copy to system clipboard
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(clipboardText).catch(err => {
+        console.error('Failed to copy to clipboard:', err);
+      });
+    }
+    
+    // Store clipboard data and mark as copy operation (not cut)
+    setClipboardData(clipboardArray);
+    setIsCutOperation(false); // Important: mark as copy, not cut
+    
+    // Do NOT set cutCells or cutSelectionBounds for copy operation
+    // Copy operation should not show visual feedback (no dashed border)
+    
+    // Show toast message immediately
+    console.log('Setting toast message: Content copied');
+    setToastMessage('Content copied');
+    
+    // Close menu first
+    setBatchEditMenuVisible(false);
+    setBatchEditMenuPosition(null);
+    
+    // Auto-hide toast after 2 seconds
+    setTimeout(() => {
+      console.log('Clearing toast message');
+      setToastMessage(null);
+    }, 2000);
+  }, [selectedCells, getAllRowsForCellSelection, orderedProperties]);
+
   // Handle Paste operation
   const handlePaste = useCallback(async () => {
     console.log('handlePaste called');
@@ -3317,10 +3504,7 @@ export function LibraryAssetsTable({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
           onClick={() => {
-            // TODO: Implement copy functionality
-            console.log('Copy selected cells');
-            setBatchEditMenuVisible(false);
-            setBatchEditMenuPosition(null);
+            handleCopy();
           }}
         >
           <span className={styles.batchEditMenuText}>Copy</span>
