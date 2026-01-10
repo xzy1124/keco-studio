@@ -925,9 +925,66 @@ export function LibraryAssetsTable({
               setIsSaving(false);
             }
           } else if (!hasData) {
-            // If no data, just cancel
-            setIsAddingRow(false);
-            setNewRowData({});
+            // If no data, still create a blank row (for paste operations or manual editing later)
+            // This allows users to create empty rows that can be used for paste
+            if (onSaveAsset && library) {
+              // Create a blank asset with empty name (will display as blank, not "Untitled")
+              // Note: We still need to pass a name to onSaveAsset for database constraint,
+              // but the display will be empty
+              const assetName = 'Untitled'; // Required for database, but won't be displayed
+              
+              // Create optimistic asset row with temporary ID
+              const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              const optimisticAsset: AssetRow = {
+                id: tempId,
+                libraryId: library.id,
+                name: assetName,
+                propertyValues: {}, // Empty property values
+              };
+
+              // Optimistically add the blank asset to the display immediately
+              setOptimisticNewAssets(prev => {
+                const newMap = new Map(prev);
+                newMap.set(tempId, optimisticAsset);
+                return newMap;
+              });
+
+              // Reset adding state immediately
+              setIsAddingRow(false);
+              setNewRowData({});
+              
+              setIsSaving(true);
+              try {
+                await onSaveAsset(assetName, {});
+                // Remove optimistic asset after parent refreshes
+                setTimeout(() => {
+                  setOptimisticNewAssets(prev => {
+                    if (prev.has(tempId)) {
+                      const newMap = new Map(prev);
+                      newMap.delete(tempId);
+                      return newMap;
+                    }
+                    return prev;
+                  });
+                }, 2000);
+              } catch (error) {
+                console.error('Failed to save blank asset:', error);
+                // On error, revert optimistic update
+                setOptimisticNewAssets(prev => {
+                  const newMap = new Map(prev);
+                  newMap.delete(tempId);
+                  return newMap;
+                });
+                // Restore adding state so user can try again
+                setIsAddingRow(true);
+              } finally {
+                setIsSaving(false);
+              }
+            } else {
+              // If no onSaveAsset callback, just cancel (shouldn't happen in normal usage)
+              setIsAddingRow(false);
+              setNewRowData({});
+            }
           }
         }
         
@@ -1680,6 +1737,320 @@ export function LibraryAssetsTable({
     }, 2000);
   }, [selectedCells, getAllRowsForCellSelection, orderedProperties]);
 
+  // Handle Paste operation
+  const handlePaste = useCallback(async () => {
+    console.log('handlePaste called');
+    
+    // Check if there is clipboard data
+    if (!clipboardData || clipboardData.length === 0 || clipboardData[0].length === 0) {
+      console.log('No clipboard data to paste');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+    
+    // Check if there are selected cells
+    if (selectedCells.size === 0) {
+      console.log('No cells selected for paste');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      setToastMessage('Please select cells to paste');
+      setTimeout(() => setToastMessage(null), 2000);
+      return;
+    }
+    
+    const allRowsForSelection = getAllRowsForCellSelection();
+    
+    // Find the first selected cell as the paste starting point
+    const firstSelectedCell = Array.from(selectedCells)[0];
+    if (!firstSelectedCell) {
+      return;
+    }
+    
+    // Parse the first selected cell to get rowId and propertyKey
+    let startRowId = '';
+    let startPropertyKey = '';
+    let foundStartProperty = null;
+    
+    for (const property of orderedProperties) {
+      const propertyKeyWithDash = '-' + property.key;
+      if (firstSelectedCell.endsWith(propertyKeyWithDash)) {
+        startRowId = firstSelectedCell.substring(0, firstSelectedCell.length - propertyKeyWithDash.length);
+        startPropertyKey = property.key;
+        foundStartProperty = property;
+        break;
+      }
+    }
+    
+    if (!foundStartProperty || !startRowId) {
+      console.log('Could not parse first selected cell:', firstSelectedCell);
+      return;
+    }
+    
+    // Find the starting row index and property index
+    const startRowIndex = allRowsForSelection.findIndex(r => r.id === startRowId);
+    const startPropertyIndex = orderedProperties.findIndex(p => p.key === startPropertyKey);
+    
+    if (startRowIndex === -1 || startPropertyIndex === -1) {
+      console.log('Could not find starting row or property');
+      return;
+    }
+    
+    console.log('Paste starting position - rowIndex:', startRowIndex, 'propertyIndex:', startPropertyIndex);
+    console.log('Clipboard data dimensions:', clipboardData.length, 'rows x', clipboardData[0].length, 'columns');
+    
+    // Store updates to apply
+    const updatesToApply: Array<{ rowId: string; propertyKey: string; value: string | number | null }> = [];
+    // Map to store new rows data by target row index (relative to current rows)
+    const rowsToCreateByIndex = new Map<number, { name: string; propertyValues: Record<string, any> }>();
+    
+    // Calculate how many new rows we need to create
+    const maxTargetRowIndex = startRowIndex + clipboardData.length - 1;
+    const rowsNeeded = Math.max(0, maxTargetRowIndex - allRowsForSelection.length + 1);
+    
+    // Initialize new rows
+    for (let i = 0; i < rowsNeeded; i++) {
+      const targetRowIndex = allRowsForSelection.length + i;
+      rowsToCreateByIndex.set(targetRowIndex, { name: 'Untitled', propertyValues: {} });
+    }
+    
+    // Iterate through clipboard data and map to target cells
+    clipboardData.forEach((clipboardRow, clipboardRowIndex) => {
+      clipboardRow.forEach((cellValue, clipboardColIndex) => {
+        const targetRowIndex = startRowIndex + clipboardRowIndex;
+        const targetPropertyIndex = startPropertyIndex + clipboardColIndex;
+        
+        // Check if target property exists
+        if (targetPropertyIndex >= orderedProperties.length) {
+          console.log('Target property index out of range:', targetPropertyIndex);
+          return; // Skip if column is out of range
+        }
+        
+        const targetProperty = orderedProperties[targetPropertyIndex];
+        
+        // Check if data type is supported (string, int, float)
+        if (!targetProperty.dataType || !['string', 'int', 'float'].includes(targetProperty.dataType)) {
+          console.log('Unsupported data type for paste:', targetProperty.dataType);
+          return; // Skip unsupported types
+        }
+        
+        // Convert value to appropriate type
+        let convertedValue: string | number | null = null;
+        if (cellValue !== null && cellValue !== undefined && cellValue !== '') {
+          if (targetProperty.dataType === 'int') {
+            const numValue = parseInt(String(cellValue), 10);
+            convertedValue = isNaN(numValue) ? null : numValue;
+          } else if (targetProperty.dataType === 'float') {
+            const numValue = parseFloat(String(cellValue));
+            convertedValue = isNaN(numValue) ? null : numValue;
+          } else if (targetProperty.dataType === 'string') {
+            convertedValue = String(cellValue);
+          }
+        }
+        
+        // Check if target row exists, add to create map or update list
+        if (targetRowIndex >= allRowsForSelection.length) {
+          // Need to create new row - add value to the row data
+          const newRowData = rowsToCreateByIndex.get(targetRowIndex);
+          if (newRowData) {
+            newRowData.propertyValues[targetProperty.key] = convertedValue;
+          }
+        } else {
+          // Target row exists, prepare update
+          const targetRow = allRowsForSelection[targetRowIndex];
+          
+          updatesToApply.push({
+            rowId: targetRow.id,
+            propertyKey: targetProperty.key,
+            value: convertedValue,
+          });
+        }
+      });
+    });
+    
+    const rowsToCreate = Array.from(rowsToCreateByIndex.values());
+    console.log('Rows to create:', rowsToCreate.length);
+    console.log('Updates to apply:', updatesToApply.length);
+    
+    // Create new rows if needed (create them first before updating existing rows)
+    if (rowsToCreate.length > 0 && onSaveAsset && library) {
+      setIsSaving(true);
+      try {
+        // Create rows sequentially with optimistic updates
+        const createdTempIds: string[] = [];
+        for (let i = 0; i < rowsToCreate.length; i++) {
+          const rowData = rowsToCreate[i];
+          const assetName = rowData.name || 'Untitled';
+          
+          // Create optimistic asset row with temporary ID
+          const tempId = `temp-paste-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`;
+          createdTempIds.push(tempId);
+          
+          const optimisticAsset: AssetRow = {
+            id: tempId,
+            libraryId: library.id,
+            name: assetName,
+            propertyValues: { ...rowData.propertyValues },
+          };
+
+          // Optimistically add the asset to the display immediately
+          setOptimisticNewAssets(prev => {
+            const newMap = new Map(prev);
+            newMap.set(tempId, optimisticAsset);
+            return newMap;
+          });
+          
+          await onSaveAsset(assetName, rowData.propertyValues);
+        }
+        // Wait a bit for parent to refresh and match optimistic assets with real ones
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Clean up optimistic assets after parent refresh (they should be replaced by real assets)
+        setTimeout(() => {
+          createdTempIds.forEach(tempId => {
+            setOptimisticNewAssets(prev => {
+              if (prev.has(tempId)) {
+                const newMap = new Map(prev);
+                newMap.delete(tempId);
+                return newMap;
+              }
+              return prev;
+            });
+          });
+        }, 2000);
+      } catch (error) {
+        console.error('Failed to create rows for paste:', error);
+        setIsSaving(false);
+        setBatchEditMenuVisible(false);
+        setBatchEditMenuPosition(null);
+        setToastMessage('Failed to paste: could not create new rows');
+        setTimeout(() => setToastMessage(null), 2000);
+        return;
+      }
+      setIsSaving(false);
+    }
+    
+    // Apply updates to existing rows
+    if (updatesToApply.length > 0 && onUpdateAsset) {
+      setIsSaving(true);
+      try {
+        // Group updates by rowId for efficiency
+        const updatesByRow = new Map<string, Record<string, any>>();
+        
+        // Initialize updatesByRow with existing property values
+        updatesToApply.forEach(({ rowId, propertyKey, value }) => {
+          if (!updatesByRow.has(rowId)) {
+            const row = allRowsForSelection.find(r => r.id === rowId);
+            if (row) {
+              // Copy all existing property values (may include boolean and other types)
+              updatesByRow.set(rowId, { ...row.propertyValues });
+            } else {
+              updatesByRow.set(rowId, {});
+            }
+          }
+          // Update with new value
+          const rowUpdates = updatesByRow.get(rowId);
+          if (rowUpdates) {
+            rowUpdates[propertyKey] = value;
+          }
+        });
+        
+        // Apply updates
+        for (const [rowId, propertyValues] of updatesByRow.entries()) {
+          const row = allRowsForSelection.find(r => r.id === rowId);
+          if (row) {
+            const assetName = row.name || 'Untitled';
+            await onUpdateAsset(rowId, assetName, propertyValues);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to update rows for paste:', error);
+        setIsSaving(false);
+        setBatchEditMenuVisible(false);
+        setBatchEditMenuPosition(null);
+        setToastMessage('Failed to paste: could not update cells');
+        setTimeout(() => setToastMessage(null), 2000);
+        return;
+      }
+      setIsSaving(false);
+    }
+    
+    // If this was a cut operation, clear the cut cells
+    if (isCutOperation && cutCells.size > 0 && onUpdateAsset) {
+      console.log('Clearing cut cells after paste');
+      
+      // Clear cut state immediately (before clearing cell contents) to remove visual feedback
+      const cutCellsToClear = new Set(cutCells);
+      setCutCells(new Set());
+      setCutSelectionBounds(null);
+      setIsCutOperation(false);
+      
+      // Group cut cells by rowId
+      const cutCellsByRow = new Map<string, Record<string, any>>();
+      
+      cutCellsToClear.forEach((cellKey) => {
+        // Parse cellKey to get rowId and propertyKey
+        let rowId = '';
+        let propertyKey = '';
+        
+        for (const property of orderedProperties) {
+          const propertyKeyWithDash = '-' + property.key;
+          if (cellKey.endsWith(propertyKeyWithDash)) {
+            rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+            propertyKey = property.key;
+            break;
+          }
+        }
+        
+        if (rowId && propertyKey) {
+          const row = allRowsForSelection.find(r => r.id === rowId);
+          if (row) {
+            if (!cutCellsByRow.has(rowId)) {
+              // Copy all existing property values (may include boolean and other types)
+              cutCellsByRow.set(rowId, { ...row.propertyValues });
+            }
+            const rowUpdates = cutCellsByRow.get(rowId);
+            if (rowUpdates) {
+              rowUpdates[propertyKey] = null; // Clear the cell
+            }
+          }
+        }
+      });
+      
+      // Apply clearing updates (async, but cut state is already cleared)
+      setIsSaving(true);
+      try {
+        for (const [rowId, propertyValues] of cutCellsByRow.entries()) {
+          const row = allRowsForSelection.find(r => r.id === rowId);
+          if (row) {
+            const assetName = row.name || 'Untitled';
+            await onUpdateAsset(rowId, assetName, propertyValues);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to clear cut cells after paste:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    } else {
+      // If not a cut operation, still clear clipboard data
+      setClipboardData(null);
+      setIsCutOperation(false);
+    }
+    
+    // Clear selected cells (optional, you might want to keep selection)
+    // setSelectedCells(new Set());
+    
+    // Show toast message
+    setToastMessage('Content pasted');
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2000);
+    
+    // Close menu
+    setBatchEditMenuVisible(false);
+    setBatchEditMenuPosition(null);
+  }, [clipboardData, selectedCells, getAllRowsForCellSelection, orderedProperties, isCutOperation, cutCells, onSaveAsset, onUpdateAsset, library]);
+
   // Handle delete asset with optimistic update
   const handleDeleteAsset = async () => {
     if (!deletingAssetId || !onDeleteAsset) return;
@@ -2184,7 +2555,8 @@ export function LibraryAssetsTable({
                             </span>
                           </div>
                         ) : (
-                          <span className={styles.placeholderValue}>—</span>
+                          // Show blank instead of dash for empty media fields
+                          <span></span>
                         )}
                         {showExpandIcon && (
                           <div
@@ -2451,9 +2823,16 @@ export function LibraryAssetsTable({
                   
                   // Other fields: show text only
                   // For name field, fallback to row.name if propertyValues doesn't have it
+                  // But don't display "Untitled" for blank rows - show empty instead
                   let value = row.propertyValues[property.key];
                   if (isNameField && (value === null || value === undefined || value === '')) {
-                    value = row.name;
+                    // Only use row.name as fallback if it's not 'Untitled' (for blank rows)
+                    // This ensures new blank rows don't show "Untitled"
+                    if (row.name && row.name !== 'Untitled') {
+                      value = row.name;
+                    } else {
+                      value = null; // Show blank for new rows with default "Untitled" name
+                    }
                   }
                   let display: string | null = null;
                   
@@ -2497,7 +2876,7 @@ export function LibraryAssetsTable({
                         // Name field: show text + view detail button
                         <div className={styles.cellContent}>
                           <span className={styles.cellText}>
-                            {display ? display : <span className={styles.placeholderValue}>—</span>}
+                            {display || ''}
                           </span>
                           <button
                             className={styles.viewDetailButton}
@@ -2521,8 +2900,9 @@ export function LibraryAssetsTable({
                         </div>
                       ) : (
                         // Other fields: show text with ellipsis for long content
+                        // Show blank (empty string) instead of placeholder dash for empty values
                         <span className={styles.cellText} title={display || ''}>
-                          {display ? display : <span className={styles.placeholderValue}>—</span>}
+                          {display || ''}
                         </span>
                       )}
                       {showExpandIcon && (
@@ -2956,10 +3336,7 @@ export function LibraryAssetsTable({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
           onClick={() => {
-            // TODO: Implement paste functionality
-            console.log('Paste to selected cells');
-            setBatchEditMenuVisible(false);
-            setBatchEditMenuPosition(null);
+            handlePaste();
           }}
         >
           <span className={styles.batchEditMenuText}>Paste</span>
