@@ -98,18 +98,77 @@ export function LibraryAssetsTable({
         const newMap = new Map(prev);
         
         for (const [tempId, optimisticAsset] of newMap.entries()) {
-          // Check if there's a real row with matching name and similar property values
+          // Extract timestamp from tempId to check if this is a recent addition (within 5 seconds)
+          const tempIdMatch = tempId.match(/temp-(\d+)-/);
+          const createdAt = tempIdMatch ? parseInt(tempIdMatch[1], 10) : Date.now();
+          const ageInSeconds = (Date.now() - createdAt) / 1000;
+          const isRecent = ageInSeconds < 5; // Consider assets added within last 5 seconds as "recent"
+          
+          // Check if there's a real row with matching name
+          // For recent additions, just check name match (more lenient for file fields)
+          // For older additions, require more strict matching
           const matchingRow = rows.find(row => {
+            // Name must always match
             if (row.name !== optimisticAsset.name) return false;
-            // Check if property values match (allowing for some differences due to data transformation)
+            
+            // For recent additions, if name matches, consider it a match
+            // This handles cases where file fields have different formats
+            if (isRecent) {
+              return true;
+            }
+            
+            // For older additions, do stricter matching
             const optimisticKeys = Object.keys(optimisticAsset.propertyValues);
             const rowKeys = Object.keys(row.propertyValues);
-            if (optimisticKeys.length !== rowKeys.length) return false;
-            // If most keys match, consider it a match
-            const matchingKeys = optimisticKeys.filter(key => 
-              optimisticAsset.propertyValues[key] === row.propertyValues[key]
-            );
-            return matchingKeys.length >= optimisticKeys.length * 0.8; // 80% match threshold
+            
+            // Allow for slight differences in keys
+            if (Math.abs(optimisticKeys.length - rowKeys.length) > 1) return false;
+            
+            // Count matching keys, with special handling for file/image fields
+            let matchingCount = 0;
+            let totalNonFileCount = 0;
+            
+            for (const key of optimisticKeys) {
+              const optimisticValue = optimisticAsset.propertyValues[key];
+              const realValue = row.propertyValues[key];
+              
+              // Check if this is likely a file/image field
+              // Type guard: check if optimisticValue is a non-null object with file-related properties
+              let optimisticIsFile = false;
+              if (optimisticValue !== null && optimisticValue !== undefined && typeof optimisticValue === 'object') {
+                const obj = optimisticValue as Record<string, any>;
+                optimisticIsFile = 'fileId' in obj || 'url' in obj || 'file_name' in obj;
+              }
+              
+              // Type guard: check if realValue is a string or non-null object with file-related properties
+              let realIsFile = false;
+              if (realValue !== null && realValue !== undefined) {
+                if (typeof realValue === 'string') {
+                  realIsFile = true;
+                } else if (typeof realValue === 'object') {
+                  const obj = realValue as Record<string, any>;
+                  realIsFile = 'fileId' in obj || 'url' in obj || 'file_name' in obj;
+                }
+              }
+              
+              if (optimisticIsFile || realIsFile) {
+                // For file fields, check if both have a value (don't require exact match)
+                // because file URLs might differ between upload and save
+                if (optimisticValue && realValue) {
+                  matchingCount++;
+                }
+              } else {
+                totalNonFileCount++;
+                // For non-file fields, require exact match
+                if (optimisticValue === realValue) {
+                  matchingCount++;
+                }
+              }
+            }
+            
+            // Consider it a match if most non-file fields match (>= 70%)
+            const nonFileMatchRatio = totalNonFileCount > 0 ? matchingCount / totalNonFileCount : 1;
+            return nonFileMatchRatio >= 0.7 && matchingCount > 0;
           });
           
           if (matchingRow) {
@@ -133,8 +192,38 @@ export function LibraryAssetsTable({
             // Check if the real row matches the optimistic update (indicating parent has refreshed)
             // Compare name and property values to see if they match
             const nameMatches = realRow.name === optimisticUpdate.name;
+            
+            // For property values, handle file/image fields specially
             const valuesMatch = Object.keys(optimisticUpdate.propertyValues).every(key => {
-              return realRow.propertyValues[key] === optimisticUpdate.propertyValues[key];
+              const optimisticValue = optimisticUpdate.propertyValues[key];
+              const realValue = realRow.propertyValues[key];
+              
+              // For file/image fields, just check if both have values (don't require exact match)
+              // Type guard: check if optimisticValue is a non-null object with file-related properties
+              let optimisticIsFile = false;
+              if (optimisticValue !== null && optimisticValue !== undefined && typeof optimisticValue === 'object') {
+                const obj = optimisticValue as Record<string, any>;
+                optimisticIsFile = 'fileId' in obj || 'url' in obj || 'file_name' in obj;
+              }
+              
+              // Type guard: check if realValue is a string or non-null object with file-related properties
+              let realIsFile = false;
+              if (realValue !== null && realValue !== undefined) {
+                if (typeof realValue === 'string') {
+                  realIsFile = true;
+                } else if (typeof realValue === 'object') {
+                  const obj = realValue as Record<string, any>;
+                  realIsFile = 'fileId' in obj || 'url' in obj || 'file_name' in obj;
+                }
+              }
+              
+              if (optimisticIsFile || realIsFile) {
+                // For file fields, both having a value is enough (URLs might differ)
+                return !!(optimisticValue && realValue);
+              } else {
+                // For non-file fields, require exact match
+                return optimisticValue === realValue;
+              }
             });
             
             // If they match, remove the optimistic update as parent has refreshed
@@ -149,6 +238,36 @@ export function LibraryAssetsTable({
       });
     }
   }, [rows, optimisticNewAssets.size, optimisticEditUpdates.size]);
+
+  // Auto-cleanup optimistic new assets that are older than 10 seconds
+  // This ensures that even if matching fails, old optimistic assets will be removed
+  useEffect(() => {
+    if (optimisticNewAssets.size === 0) return;
+
+    const cleanupInterval = setInterval(() => {
+      setOptimisticNewAssets(prev => {
+        const newMap = new Map(prev);
+        let hasChanges = false;
+
+        for (const [tempId] of newMap.entries()) {
+          // Extract timestamp from tempId
+          const tempIdMatch = tempId.match(/temp-(\d+)-/);
+          const createdAt = tempIdMatch ? parseInt(tempIdMatch[1], 10) : Date.now();
+          const ageInSeconds = (Date.now() - createdAt) / 1000;
+
+          // Remove assets older than 10 seconds (they should have been matched by now)
+          if (ageInSeconds > 10) {
+            newMap.delete(tempId);
+            hasChanges = true;
+          }
+        }
+
+        return hasChanges ? newMap : prev;
+      });
+    }, 1000); // Check every second
+
+    return () => clearInterval(cleanupInterval);
+  }, [optimisticNewAssets.size]);
 
   // Ref for table container to detect clicks outside
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -670,15 +789,16 @@ export function LibraryAssetsTable({
     setIsSaving(true);
     try {
       await onSaveAsset(assetName, savedNewRowData);
-      // Remove optimistic asset after a short delay to allow parent to refresh
+      // Remove optimistic asset after a delay to allow parent to refresh
       // The parent refresh will replace it with the real asset
+      // Use longer delay to ensure parent has time to refresh, especially for file uploads
       setTimeout(() => {
         setOptimisticNewAssets(prev => {
           const newMap = new Map(prev);
           newMap.delete(tempId);
           return newMap;
         });
-      }, 500);
+      }, 2000); // Increased from 500ms to 2000ms to handle file uploads better
     } catch (error) {
       console.error('Failed to save asset:', error);
       // On error, revert optimistic update - remove the optimistic asset
@@ -768,14 +888,15 @@ export function LibraryAssetsTable({
             setIsSaving(true);
             try {
               await onSaveAsset(assetName, savedNewRowData);
-              // Remove optimistic asset after a short delay to allow parent to refresh
+              // Remove optimistic asset after a delay to allow parent to refresh
+              // Use longer delay to ensure parent has time to refresh, especially for file uploads
               setTimeout(() => {
                 setOptimisticNewAssets(prev => {
                   const newMap = new Map(prev);
                   newMap.delete(tempId);
                   return newMap;
                 });
-              }, 500);
+              }, 2000); // Increased from 500ms to 2000ms to handle file uploads better
             } catch (error) {
               console.error('Failed to save asset:', error);
               // On error, revert optimistic update
