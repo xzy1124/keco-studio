@@ -21,31 +21,59 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     // Check if there's a valid session (token from email link)
     const checkSession = async () => {
-      // Supabase automatically processes the hash from the reset link
-      // Wait a moment for Supabase to process the hash and create a session
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (session) {
-        setIsValidSession(true);
-      } else {
-        // Check if there's a hash in the URL (Supabase redirects with hash)
+      try {
+        // Check for hash parameters in URL (Supabase redirects with hash)
         const hash = window.location.hash;
+        
         if (hash && hash.includes('access_token')) {
-          // Wait a bit more for Supabase to process
+          // Supabase hash format: #access_token=...&type=recovery&...
+          // Extract and handle the hash to create session
+          const hashParams = new URLSearchParams(hash.substring(1));
+          const accessToken = hashParams.get('access_token');
+          const type = hashParams.get('type');
+          
+          console.log('Found hash in URL:', { accessToken: !!accessToken, type });
+          
+          // If it's a recovery token, Supabase should automatically handle it
+          // Wait for Supabase to process the hash
           await new Promise(resolve => setTimeout(resolve, 1000));
-          const { data: { session: retrySession } } = await supabase.auth.getSession();
-          if (retrySession) {
+          
+          // Get session after hash processing
+          const { data: { session }, error } = await supabase.auth.getSession();
+          
+          if (error) {
+            console.error('Session error:', error);
+            setError(`Session error: ${error.message}`);
+            setIsValidSession(false);
+            return;
+          }
+          
+          if (session) {
+            console.log('Session created successfully');
             setIsValidSession(true);
+            // Clear the hash from URL for cleaner UX
+            window.history.replaceState(null, '', window.location.pathname);
           } else {
-            setError('Invalid or expired reset link. Please request a new one.');
+            console.error('No session after processing hash');
+            setError('Invalid or expired reset link. The link may have expired. Please request a new password reset.');
             setIsValidSession(false);
           }
         } else {
-          setError('Invalid reset link. Please request a new password reset.');
-          setIsValidSession(false);
+          // Check if we already have a session (user refreshed page after successful reset)
+          const { data: { session }, error } = await supabase.auth.getSession();
+          
+          if (session) {
+            setIsValidSession(true);
+          } else {
+            console.error('No hash found in URL and no existing session');
+            setError('Invalid reset link. Please use the link from your email to reset your password.');
+            setIsValidSession(false);
+          }
         }
+      } catch (err: any) {
+        console.error('Error checking session:', err);
+        setError('An error occurred while verifying the reset link. Please try again.');
+        setIsValidSession(false);
       }
     };
 
@@ -73,20 +101,40 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     try {
+      // Verify we still have a valid session before updating password
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error before password update:', sessionError);
+        throw new Error(`Session error: ${sessionError.message}`);
+      }
+      
+      if (!session) {
+        console.error('No session available for password update');
+        throw new Error('Your reset session has expired. Please request a new password reset link.');
+      }
+
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Password update error:', error);
+        throw error;
+      }
 
       setMessage('Password reset successfully! Redirecting to login...');
+      
+      // Sign out the user after successful password reset (optional, recommended)
+      await supabase.auth.signOut();
       
       // Wait a moment to show success message, then redirect
       setTimeout(() => {
         router.push('/?message=Password reset successfully');
       }, 1500);
     } catch (error: any) {
-      setError(error?.message || 'Failed to reset password');
+      console.error('Failed to reset password:', error);
+      setError(error?.message || 'Failed to reset password. Please try again or request a new reset link.');
     } finally {
       setLoading(false);
     }
