@@ -174,9 +174,10 @@ export default function ResetPasswordPage() {
 
       setMessage('Password reset successfully! Redirecting to login...');
       
-      // Sign out the user after successful password reset (optional, recommended)
-      console.log('Signing out user...');
-      await supabase.auth.signOut();
+      // Note: We don't sign out here because:
+      // 1. The user should remain logged in with their new password
+      // 2. The reset session is temporary and will expire naturally
+      // 3. If they want to log out, they can use the logout button
       
       // Wait a moment to show success message, then redirect
       setTimeout(() => {
