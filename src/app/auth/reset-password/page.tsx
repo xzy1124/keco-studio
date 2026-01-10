@@ -141,27 +141,16 @@ export default function ResetPasswordPage() {
 
       console.log('Calling updateUser API...');
       
-      // Update password with timeout handling
-      const updatePromise = supabase.auth.updateUser({
+      // Update password - the API call should complete quickly based on network timing
+      const { data, error } = await supabase.auth.updateUser({
         password: newPassword,
       });
-
-      // Add timeout to prevent hanging (30 seconds)
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          console.error('Password update request timed out after 30 seconds');
-          reject(new Error('Password update request timed out. Please check your network connection and try again.'));
-        }, 30000);
-      });
-
-      console.log('Waiting for updateUser response...');
-      const result = await Promise.race([updatePromise, timeoutPromise]);
-      const { data, error } = result as any;
       
       console.log('updateUser response received:', { 
         hasData: !!data, 
         hasError: !!error,
-        errorMessage: error?.message 
+        errorMessage: error?.message,
+        userData: data?.user ? 'present' : 'missing'
       });
 
       if (error) {
@@ -170,7 +159,13 @@ export default function ResetPasswordPage() {
         throw error;
       }
 
-      console.log('Password updated successfully:', data);
+      // Verify that password was actually updated
+      if (!data || !data.user) {
+        console.error('Password update response missing user data:', data);
+        throw new Error('Password update completed but response is invalid. Please try again.');
+      }
+
+      console.log('Password updated successfully for user:', data.user.email || data.user.id);
 
       setMessage('Password reset successfully! Redirecting to login...');
       
