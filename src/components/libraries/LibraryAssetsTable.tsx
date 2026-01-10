@@ -38,7 +38,7 @@ export type LibraryAssetsTableProps = {
   sections: SectionConfig[];
   properties: PropertyConfig[];
   rows: AssetRow[];
-  onSaveAsset?: (assetName: string, propertyValues: Record<string, any>) => Promise<void>;
+  onSaveAsset?: (assetName: string, propertyValues: Record<string, any>, options?: { createdAt?: Date }) => Promise<void>;
   onUpdateAsset?: (assetId: string, assetName: string, propertyValues: Record<string, any>) => Promise<void>;
   onDeleteAsset?: (assetId: string) => Promise<void>;
 };
@@ -2238,6 +2238,276 @@ export function LibraryAssetsTable({
     setBatchEditMenuPosition(null);
   }, [clipboardData, selectedCells, getAllRowsForCellSelection, orderedProperties, isCutOperation, cutCells, onSaveAsset, onUpdateAsset, library]);
 
+  // Handle Insert Row Above operation
+  const handleInsertRowAbove = useCallback(async () => {
+    console.log('handleInsertRowAbove called, selectedCells:', selectedCells);
+    
+    if (selectedCells.size === 0) {
+      console.log('No cells selected');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    if (!onSaveAsset || !library) {
+      console.log('onSaveAsset or library not available');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Extract unique row IDs from selected cells
+    const allRowsForSelection = getAllRowsForCellSelection();
+    const selectedRowIds = new Set<string>();
+    
+    selectedCells.forEach((cellKey) => {
+      // Parse cellKey to extract rowId
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          const rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+          selectedRowIds.add(rowId);
+          break;
+        }
+      }
+    });
+
+    if (selectedRowIds.size === 0) {
+      console.log('No valid rows found in selected cells');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Sort row IDs by their index in allRowsForSelection (from top to bottom)
+    const sortedRowIds = Array.from(selectedRowIds).sort((a, b) => {
+      const indexA = allRowsForSelection.findIndex(r => r.id === a);
+      const indexB = allRowsForSelection.findIndex(r => r.id === b);
+      return indexA - indexB;
+    });
+
+    console.log('Selected rows (sorted):', sortedRowIds.length, 'rows');
+    console.log('Row IDs:', sortedRowIds);
+
+    // For each selected row, insert a new row above it
+    // Insert in reverse order (from bottom to top) to maintain correct indices
+    setIsSaving(true);
+    try {
+      // Insert rows from bottom to top to avoid index shifting issues
+      for (let i = sortedRowIds.length - 1; i >= 0; i--) {
+        const rowId = sortedRowIds[i];
+        const row = allRowsForSelection.find(r => r.id === rowId);
+        
+        if (row && supabase) {
+          // Query the target row's created_at to calculate insertion position
+          const { data: targetRowData, error: queryError } = await supabase
+            .from('library_assets')
+            .select('created_at')
+            .eq('id', rowId)
+            .single();
+          
+          if (queryError) {
+            console.error('Failed to query target row created_at:', queryError);
+            // Fallback: use current time
+            const assetName = 'Untitled';
+            await onSaveAsset(assetName, {}, { createdAt: new Date() });
+            continue;
+          }
+          
+          // Calculate created_at for new row: set it to 1 second before target row
+          // This ensures it appears above the target row when sorted by created_at
+          const targetCreatedAt = new Date(targetRowData.created_at);
+          const newCreatedAt = new Date(targetCreatedAt.getTime() - 1000); // 1 second earlier
+          
+          // Create a blank asset above this row
+          const assetName = 'Untitled'; // Required for database, but won't be displayed
+          
+          // Create optimistic asset row with temporary ID
+          const tempId = `temp-insert-above-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`;
+          const optimisticAsset: AssetRow = {
+            id: tempId,
+            libraryId: library.id,
+            name: assetName,
+            propertyValues: {}, // Empty property values
+          };
+
+          // Optimistically add the asset to the display immediately
+          setOptimisticNewAssets(prev => {
+            const newMap = new Map(prev);
+            newMap.set(tempId, optimisticAsset);
+            return newMap;
+          });
+          
+          await onSaveAsset(assetName, {}, { createdAt: newCreatedAt });
+          
+          // Remove optimistic asset after parent refreshes (it should be inserted at the correct position by the database)
+          setTimeout(() => {
+            setOptimisticNewAssets(prev => {
+              if (prev.has(tempId)) {
+                const newMap = new Map(prev);
+                newMap.delete(tempId);
+                return newMap;
+              }
+              return prev;
+            });
+          }, 2000);
+        } else if (row) {
+          // Fallback if supabase is not available
+          const assetName = 'Untitled';
+          await onSaveAsset(assetName, {});
+        }
+      }
+      
+      // Wait a bit for rows to be created and parent to refresh
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Failed to insert rows above:', error);
+      setToastMessage('Failed to insert rows above');
+      setTimeout(() => setToastMessage(null), 2000);
+    } finally {
+      setIsSaving(false);
+    }
+
+    // Close menu
+    setBatchEditMenuVisible(false);
+    setBatchEditMenuPosition(null);
+  }, [selectedCells, getAllRowsForCellSelection, orderedProperties, onSaveAsset, library, supabase]);
+
+  // Handle Insert Row Below operation
+  const handleInsertRowBelow = useCallback(async () => {
+    console.log('handleInsertRowBelow called, selectedCells:', selectedCells);
+    
+    if (selectedCells.size === 0) {
+      console.log('No cells selected');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    if (!onSaveAsset || !library) {
+      console.log('onSaveAsset or library not available');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Extract unique row IDs from selected cells
+    const allRowsForSelection = getAllRowsForCellSelection();
+    const selectedRowIds = new Set<string>();
+    
+    selectedCells.forEach((cellKey) => {
+      // Parse cellKey to extract rowId
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          const rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+          selectedRowIds.add(rowId);
+          break;
+        }
+      }
+    });
+
+    if (selectedRowIds.size === 0) {
+      console.log('No valid rows found in selected cells');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Sort row IDs by their index in allRowsForSelection (from top to bottom)
+    const sortedRowIds = Array.from(selectedRowIds).sort((a, b) => {
+      const indexA = allRowsForSelection.findIndex(r => r.id === a);
+      const indexB = allRowsForSelection.findIndex(r => r.id === b);
+      return indexA - indexB;
+    });
+
+    console.log('Selected rows (sorted):', sortedRowIds.length, 'rows');
+    console.log('Row IDs:', sortedRowIds);
+
+    // For each selected row, insert a new row below it
+    // Insert from bottom to top to avoid index shifting issues
+    setIsSaving(true);
+    try {
+      // Insert rows from bottom to top to maintain correct indices
+      for (let i = sortedRowIds.length - 1; i >= 0; i--) {
+        const rowId = sortedRowIds[i];
+        const row = allRowsForSelection.find(r => r.id === rowId);
+        
+        if (row && supabase) {
+          // Query the target row's created_at to calculate insertion position
+          const { data: targetRowData, error: queryError } = await supabase
+            .from('library_assets')
+            .select('created_at')
+            .eq('id', rowId)
+            .single();
+          
+          if (queryError) {
+            console.error('Failed to query target row created_at:', queryError);
+            // Fallback: use current time
+            const assetName = 'Untitled';
+            await onSaveAsset(assetName, {}, { createdAt: new Date() });
+            continue;
+          }
+          
+          // Calculate created_at for new row: set it to 1 second after target row
+          // This ensures it appears below the target row when sorted by created_at
+          const targetCreatedAt = new Date(targetRowData.created_at);
+          const newCreatedAt = new Date(targetCreatedAt.getTime() + 1000); // 1 second later
+          
+          // Create a blank asset below this row
+          const assetName = 'Untitled'; // Required for database, but won't be displayed
+          
+          // Create optimistic asset row with temporary ID
+          const tempId = `temp-insert-below-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`;
+          const optimisticAsset: AssetRow = {
+            id: tempId,
+            libraryId: library.id,
+            name: assetName,
+            propertyValues: {}, // Empty property values
+          };
+
+          // Optimistically add the asset to the display immediately
+          setOptimisticNewAssets(prev => {
+            const newMap = new Map(prev);
+            newMap.set(tempId, optimisticAsset);
+            return newMap;
+          });
+          
+          await onSaveAsset(assetName, {}, { createdAt: newCreatedAt });
+          
+          // Remove optimistic asset after parent refreshes (it should be inserted at the correct position by the database)
+          setTimeout(() => {
+            setOptimisticNewAssets(prev => {
+              if (prev.has(tempId)) {
+                const newMap = new Map(prev);
+                newMap.delete(tempId);
+                return newMap;
+              }
+              return prev;
+            });
+          }, 2000);
+        } else if (row) {
+          // Fallback if supabase is not available
+          const assetName = 'Untitled';
+          await onSaveAsset(assetName, {});
+        }
+      }
+      
+      // Wait a bit for rows to be created and parent to refresh
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Failed to insert rows below:', error);
+      setToastMessage('Failed to insert rows below');
+      setTimeout(() => setToastMessage(null), 2000);
+    } finally {
+      setIsSaving(false);
+    }
+
+    // Close menu
+    setBatchEditMenuVisible(false);
+    setBatchEditMenuPosition(null);
+  }, [selectedCells, getAllRowsForCellSelection, orderedProperties, onSaveAsset, library, supabase]);
+
   // Handle delete asset with optimistic update
   const handleDeleteAsset = async () => {
     if (!deletingAssetId || !onDeleteAsset) return;
@@ -3538,10 +3808,7 @@ export function LibraryAssetsTable({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
           onClick={() => {
-            // TODO: Implement insert row above functionality
-            console.log('Insert row above');
-            setBatchEditMenuVisible(false);
-            setBatchEditMenuPosition(null);
+            handleInsertRowAbove();
           }}
         >
           <span className={styles.batchEditMenuText}>Insert row above</span>
@@ -3557,10 +3824,7 @@ export function LibraryAssetsTable({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
           onClick={() => {
-            // TODO: Implement insert row below functionality
-            console.log('Insert row below');
-            setBatchEditMenuVisible(false);
-            setBatchEditMenuPosition(null);
+            handleInsertRowBelow();
           }}
         >
           <span className={styles.batchEditMenuText}>Insert row below</span>

@@ -257,8 +257,8 @@ export default function LibraryPage() {
   };
 
   // Callback for saving new asset from table
-  const handleSaveAssetFromTable = async (assetName: string, propertyValues: Record<string, any>) => {
-    await createAsset(supabase, libraryId, assetName, propertyValues);
+  const handleSaveAssetFromTable = async (assetName: string, propertyValues: Record<string, any>, options?: { createdAt?: Date }) => {
+    await createAsset(supabase, libraryId, assetName, propertyValues, options);
     // Refresh asset rows
     const rows = await getLibraryAssetsWithProperties(supabase, libraryId);
     setAssetRows(rows);
