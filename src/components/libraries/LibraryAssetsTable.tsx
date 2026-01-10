@@ -216,6 +216,10 @@ export function LibraryAssetsTable({
   // Asset names cache for display
   const [assetNamesCache, setAssetNamesCache] = useState<Record<string, string>>({});
 
+  // Row selection state
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+
   // Hover state for asset card
   const [hoveredAssetId, setHoveredAssetId] = useState<string | null>(null);
   const [hoveredAssetDetails, setHoveredAssetDetails] = useState<{
@@ -1078,6 +1082,22 @@ export function LibraryAssetsTable({
     router.push(`/${projectId}/${libraryId}/predefine`);
   };
 
+  // Handle row selection toggle
+  const handleRowSelectionToggle = (rowId: string, e?: React.MouseEvent | MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setSelectedRowIds(prev => {
+      const next = new Set(prev);
+      if (next.has(rowId)) {
+        next.delete(rowId);
+      } else {
+        next.add(rowId);
+      }
+      return next;
+    });
+  };
+
   // Handle right-click context menu
   const handleRowContextMenu = (e: React.MouseEvent, row: AssetRow) => {
     e.preventDefault();
@@ -1299,6 +1319,8 @@ export function LibraryAssetsTable({
                 <tr
                   key={row.id}
                   className={styles.editRow}
+                  onMouseEnter={() => setHoveredRowId(row.id)}
+                  onMouseLeave={() => setHoveredRowId(null)}
                 >
                   <td className={styles.numberCell}>{index + 1}</td>
                   {orderedProperties.map((property) => {
@@ -1433,13 +1455,35 @@ export function LibraryAssetsTable({
             }
             
             // Normal display row
+            const isRowHovered = hoveredRowId === row.id;
+            const isRowSelected = selectedRowIds.has(row.id);
+            
             return (
               <tr
                 key={row.id}
-                className={styles.row}
+                className={`${styles.row} ${isRowSelected ? styles.rowSelected : ''}`}
                 onContextMenu={(e) => handleRowContextMenu(e, row)}
+                onMouseEnter={() => setHoveredRowId(row.id)}
+                onMouseLeave={() => setHoveredRowId(null)}
               >
-                <td className={styles.numberCell}>{index + 1}</td>
+                <td className={styles.numberCell}>
+                  {isRowHovered || isRowSelected ? (
+                    <div className={styles.checkboxContainer}>
+                      <Checkbox
+                        checked={isRowSelected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleRowSelectionToggle(row.id, e);
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <span>{index + 1}</span>
+                  )}
+                </td>
                 {orderedProperties.map((property, propertyIndex) => {
                   // Check if this is the first property (name field)
                   const isNameField = propertyIndex === 0;

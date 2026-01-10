@@ -263,6 +263,94 @@
   font-weight: 500;
   background: rgba(245, 246, 249, 1);
   border-right: 1px solid #e2e8f0;
+  position: relative;
+  transition: background-color 0.15s ease;
+  vertical-align: middle;
+  box-sizing: border-box;
+  line-height: 1.5;
+}
+
+/* Number cell hover state when row is hovered */
+.row:hover .numberCell {
+  background: rgba(151, 71, 255, 0.09);
+}
+
+/* Row selected state */
+.rowSelected {
+  background: rgba(151, 71, 255, 0.06) !important;
+}
+
+.rowSelected .numberCell {
+  background: rgba(151, 71, 255, 0.09);
+}
+
+.rowSelected:hover {
+  background: rgba(151, 71, 255, 0.09) !important;
+}
+
+.checkboxContainer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  line-height: 1.5;
+  vertical-align: middle;
+  height: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.checkboxContainer :global(.ant-checkbox) {
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0;
+  top: 0;
+  vertical-align: middle;
+}
+
+.checkboxContainer :global(.ant-checkbox-wrapper) {
+  line-height: 1.5;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  height: auto;
+}
+
+.checkboxContainer :global(.ant-checkbox-inner) {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border-color: #d1d5db;
+  transition: all 0.2s ease;
+  margin: 0;
+  display: block;
+}
+
+.checkboxContainer :global(.ant-checkbox-inner::after) {
+  width: 5px;
+  height: 8px;
+}
+
+.checkboxContainer :global(.ant-checkbox-checked .ant-checkbox-inner) {
+  background-color: #8726EE;
+  border-color: #8726EE;
+}
+
+.checkboxContainer :global(.ant-checkbox:hover .ant-checkbox-inner) {
+  border-color: #8726EE;
+}
+
+.checkboxContainer :global(.ant-checkbox-checked:hover .ant-checkbox-inner) {
+  background-color: #6a1fc2;
+  border-color: #6a1fc2;
+}
+
+.checkboxContainer :global(.ant-checkbox-input:focus + .ant-checkbox-inner) {
+  border-color: #8726EE;
+  box-shadow: 0 0 0 2px rgba(135, 38, 238, 0.2);
 }
 
 /* Actions column styles */
