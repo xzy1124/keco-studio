@@ -11,6 +11,11 @@ import styles from './page.module.css';
 export default function ResetPasswordPage() {
   const supabase = useSupabase();
   const router = useRouter();
+  
+  // Log Supabase client info for debugging
+  useEffect(() => {
+    console.log('ResetPasswordPage: Supabase client available');
+  }, []);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -100,8 +105,14 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true);
+    setError(null);
+    setMessage(null);
+    
     try {
+      console.log('Starting password reset process...');
+      
       // Verify we still have a valid session before updating password
+      console.log('Checking session before password update...');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
@@ -114,27 +125,80 @@ export default function ResetPasswordPage() {
         throw new Error('Your reset session has expired. Please request a new password reset link.');
       }
 
-      const { error } = await supabase.auth.updateUser({
+      console.log('Session valid, updating password...', {
+        userId: session.user.id,
+        email: session.user.email,
+        accessToken: session.access_token ? 'present' : 'missing',
+        tokenExpiry: new Date(session.expires_at! * 1000).toISOString()
+      });
+
+      // Check if token is expired
+      const now = Math.floor(Date.now() / 1000);
+      if (session.expires_at && session.expires_at < now) {
+        console.error('Session token has expired');
+        throw new Error('Your reset session has expired. Please request a new password reset link.');
+      }
+
+      console.log('Calling updateUser API...');
+      
+      // Update password with timeout handling
+      const updatePromise = supabase.auth.updateUser({
         password: newPassword,
+      });
+
+      // Add timeout to prevent hanging (30 seconds)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          console.error('Password update request timed out after 30 seconds');
+          reject(new Error('Password update request timed out. Please check your network connection and try again.'));
+        }, 30000);
+      });
+
+      console.log('Waiting for updateUser response...');
+      const result = await Promise.race([updatePromise, timeoutPromise]);
+      const { data, error } = result as any;
+      
+      console.log('updateUser response received:', { 
+        hasData: !!data, 
+        hasError: !!error,
+        errorMessage: error?.message 
       });
 
       if (error) {
         console.error('Password update error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
+
+      console.log('Password updated successfully:', data);
 
       setMessage('Password reset successfully! Redirecting to login...');
       
       // Sign out the user after successful password reset (optional, recommended)
+      console.log('Signing out user...');
       await supabase.auth.signOut();
       
       // Wait a moment to show success message, then redirect
       setTimeout(() => {
+        console.log('Redirecting to login page...');
         router.push('/?message=Password reset successfully');
       }, 1500);
     } catch (error: any) {
       console.error('Failed to reset password:', error);
-      setError(error?.message || 'Failed to reset password. Please try again or request a new reset link.');
+      console.error('Error type:', typeof error);
+      console.error('Error stack:', error?.stack);
+      
+      // More detailed error message
+      let errorMessage = 'Failed to reset password. ';
+      if (error?.message) {
+        errorMessage += error.message;
+      } else if (typeof error === 'string') {
+        errorMessage += error;
+      } else {
+        errorMessage += 'Please try again or request a new reset link.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
