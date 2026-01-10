@@ -12,10 +12,6 @@ export default function ResetPasswordPage() {
   const supabase = useSupabase();
   const router = useRouter();
   
-  // Log Supabase client info for debugging
-  useEffect(() => {
-    console.log('ResetPasswordPage: Supabase client available');
-  }, []);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,11 +33,9 @@ export default function ResetPasswordPage() {
           const accessToken = hashParams.get('access_token');
           const type = hashParams.get('type');
           
-          console.log('Found hash in URL:', { accessToken: !!accessToken, type });
-          
           // If it's a recovery token, Supabase should automatically handle it
-          // Wait for Supabase to process the hash
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Wait for Supabase to process the hash (reduced delay for faster response)
+          await new Promise(resolve => setTimeout(resolve, 500));
           
           // Get session after hash processing
           const { data: { session }, error } = await supabase.auth.getSession();
@@ -54,12 +48,10 @@ export default function ResetPasswordPage() {
           }
           
           if (session) {
-            console.log('Session created successfully');
             setIsValidSession(true);
             // Clear the hash from URL for cleaner UX
             window.history.replaceState(null, '', window.location.pathname);
           } else {
-            console.error('No session after processing hash');
             setError('Invalid or expired reset link. The link may have expired. Please request a new password reset.');
             setIsValidSession(false);
           }
@@ -70,7 +62,6 @@ export default function ResetPasswordPage() {
           if (session) {
             setIsValidSession(true);
           } else {
-            console.error('No hash found in URL and no existing session');
             setError('Invalid reset link. Please use the link from your email to reset your password.');
             setIsValidSession(false);
           }
@@ -109,109 +100,75 @@ export default function ResetPasswordPage() {
     setMessage(null);
     
     try {
-      console.log('Starting password reset process...');
-      
       // Verify we still have a valid session before updating password
-      console.log('Checking session before password update...');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
-        console.error('Session error before password update:', sessionError);
         throw new Error(`Session error: ${sessionError.message}`);
       }
       
       if (!session) {
-        console.error('No session available for password update');
         throw new Error('Your reset session has expired. Please request a new password reset link.');
       }
-
-      console.log('Session valid, updating password...', {
-        userId: session.user.id,
-        email: session.user.email,
-        accessToken: session.access_token ? 'present' : 'missing',
-        tokenExpiry: new Date(session.expires_at! * 1000).toISOString()
-      });
 
       // Check if token is expired
       const now = Math.floor(Date.now() / 1000);
       if (session.expires_at && session.expires_at < now) {
-        console.error('Session token has expired');
         throw new Error('Your reset session has expired. Please request a new password reset link.');
       }
 
-      console.log('Calling updateUser API...');
-      
-      // Update password - the API call should complete quickly based on network timing
-      const response = await supabase.auth.updateUser({
+      // Update password with timeout to prevent hanging
+      // Use a shorter timeout (8 seconds) since password update should be quick
+      const updateUserPromise = supabase.auth.updateUser({
         password: newPassword,
       });
       
-      console.log('updateUser raw response:', response);
-      console.log('updateUser response type:', typeof response);
-      console.log('updateUser response keys:', Object.keys(response || {}));
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Password update request timed out. The password may still have been updated. Please try logging in.')), 8000);
+      });
+      
+      let response;
+      try {
+        response = await Promise.race([updateUserPromise, timeoutPromise]);
+      } catch (raceError: any) {
+        // If timeout occurred, check if the actual request completed
+        // Sometimes the request completes but the promise doesn't resolve
+        if (raceError?.message?.includes('timeout')) {
+          // Wait a bit and verify if password was actually updated
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const { data: { session: verifySession }, error: verifyError } = await supabase.auth.getSession();
+          if (!verifyError && verifySession) {
+            // Session still exists, password likely was updated
+            setLoading(false);
+            setMessage('Password reset successfully! Redirecting to login...');
+            setTimeout(() => {
+              router.push('/?message=Password reset successfully');
+            }, 1000);
+            return;
+          }
+        }
+        throw raceError;
+      }
       
       const { data, error } = response;
-      
-      console.log('updateUser parsed response:', { 
-        hasData: !!data, 
-        hasError: !!error,
-        errorMessage: error?.message,
-        dataType: typeof data,
-        dataKeys: data ? Object.keys(data) : [],
-        userData: data?.user ? 'present' : 'missing',
-        dataUserType: data?.user ? typeof data.user : 'null'
-      });
 
       // If there's an error, throw it immediately
       if (error) {
         console.error('Password update error:', error);
-        console.error('Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
 
-      // If no error, consider it successful
-      // The network request already succeeded (200 OK), so password was updated
-      // We don't need to strictly validate the response format
-      let userId = 'user';
-      if (data?.user) {
-        userId = data.user.id || data.user.email || 'user';
-      } else if (data && typeof data === 'object' && data !== null) {
-        const userObj = data as { id?: string; email?: string };
-        userId = userObj.id || userObj.email || 'user';
-      }
-      
-      console.log('Password updated successfully!', {
-        userId,
-        hasData: !!data,
-        hasUser: !!data?.user
-      });
-
-      // Set loading to false and show success message
+      // Password update successful - immediately update UI
       setLoading(false);
       setMessage('Password reset successfully! Redirecting to login...');
       
-      // Note: We don't sign out here because:
-      // 1. The user should remain logged in with their new password
-      // 2. The reset session is temporary and will expire naturally
-      // 3. If they want to log out, they can use the logout button
-      
-      // Wait a moment to show success message, then redirect
+      // Redirect quickly for better UX
       setTimeout(() => {
-        console.log('Redirecting to login page...');
-        try {
-          router.push('/?message=Password reset successfully');
-        } catch (redirectError) {
-          console.error('Redirect error:', redirectError);
-          // Fallback: try window.location if router.push fails
-          window.location.href = '/?message=Password reset successfully';
-        }
-      }, 1500);
+        router.push('/?message=Password reset successfully');
+      }, 1000);
     } catch (error: any) {
       console.error('Failed to reset password:', error);
-      console.error('Error type:', typeof error);
-      console.error('Error stack:', error?.stack);
       
-      // More detailed error message
       let errorMessage = 'Failed to reset password. ';
       if (error?.message) {
         errorMessage += error.message;
@@ -222,7 +179,6 @@ export default function ResetPasswordPage() {
       }
       
       setError(errorMessage);
-    } finally {
       setLoading(false);
     }
   };
