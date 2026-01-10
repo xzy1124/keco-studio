@@ -117,55 +117,78 @@ export default function ResetPasswordPage() {
         throw new Error('Your reset session has expired. Please request a new password reset link.');
       }
 
-      // Update password with timeout to prevent hanging
-      // Use a shorter timeout (8 seconds) since password update should be quick
+      // Update password with a longer timeout (20 seconds) to accommodate slower networks
+      // Some Supabase instances may take longer due to internal processing
       const updateUserPromise = supabase.auth.updateUser({
         password: newPassword,
       });
       
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Password update request timed out. The password may still have been updated. Please try logging in.')), 8000);
+        setTimeout(() => {
+          reject(new Error('TIMEOUT'));
+        }, 20000); // 20 seconds timeout
       });
       
       let response;
       try {
+        // Race between update and timeout
         response = await Promise.race([updateUserPromise, timeoutPromise]);
-      } catch (raceError: any) {
-        // If timeout occurred, check if the actual request completed
-        // Sometimes the request completes but the promise doesn't resolve
-        if (raceError?.message?.includes('timeout')) {
-          // Wait a bit and verify if password was actually updated
-          await new Promise(resolve => setTimeout(resolve, 500));
-          const { data: { session: verifySession }, error: verifyError } = await supabase.auth.getSession();
-          if (!verifyError && verifySession) {
-            // Session still exists, password likely was updated
-            setLoading(false);
-            setMessage('Password reset successfully! Redirecting to login...');
-            setTimeout(() => {
-              router.push('/?message=Password reset successfully');
-            }, 1000);
-            return;
-          }
+        
+        // If we get here, update completed within timeout
+        const { data, error } = response;
+
+        // If there's an error, throw it immediately
+        if (error) {
+          console.error('Password update error:', error);
+          throw error;
         }
+
+        // Password update successful - immediately update UI
+        setLoading(false);
+        setMessage('Password reset successfully! Redirecting to login...');
+        
+        // Redirect quickly for better UX
+        setTimeout(() => {
+          router.push('/?message=Password reset successfully');
+        }, 1000);
+        
+      } catch (raceError: any) {
+        // Check if this was a timeout
+        if (raceError?.message === 'TIMEOUT' || raceError?.message?.includes('timeout')) {
+          // Wait a moment for any pending network requests to complete
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          
+          // Try to verify if password was actually updated by checking session and user
+          try {
+            const [sessionResult, userResult] = await Promise.all([
+              supabase.auth.getSession(),
+              supabase.auth.getUser()
+            ]);
+            
+            // If we have a valid session and user, password likely was updated successfully
+            // (Supabase typically invalidates session if password update fails)
+            if (!sessionResult.error && sessionResult.data.session && 
+                !userResult.error && userResult.data.user) {
+              // Password update likely succeeded despite timeout
+              setLoading(false);
+              setMessage('Password reset successfully! Redirecting to login...');
+              setTimeout(() => {
+                router.push('/?message=Password reset successfully');
+              }, 1000);
+              return;
+            }
+          } catch (verifyError) {
+            // Verification failed, continue to show timeout error
+            console.error('Verification error after timeout:', verifyError);
+          }
+          
+          // If verification failed or inconclusive, show timeout message
+          throw new Error('Password update is taking longer than expected. The password may still be updating. Please wait a moment and try logging in. If the problem persists, please request a new reset link.');
+        }
+        
+        // For other errors (actual API errors), re-throw them
         throw raceError;
       }
-      
-      const { data, error } = response;
-
-      // If there's an error, throw it immediately
-      if (error) {
-        console.error('Password update error:', error);
-        throw error;
-      }
-
-      // Password update successful - immediately update UI
-      setLoading(false);
-      setMessage('Password reset successfully! Redirecting to login...');
-      
-      // Redirect quickly for better UX
-      setTimeout(() => {
-        router.push('/?message=Password reset successfully');
-      }, 1000);
     } catch (error: any) {
       console.error('Failed to reset password:', error);
       
