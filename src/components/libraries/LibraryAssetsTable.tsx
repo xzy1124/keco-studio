@@ -2289,41 +2289,59 @@ export function LibraryAssetsTable({
     console.log('Selected rows (sorted):', sortedRowIds.length, 'rows');
     console.log('Row IDs:', sortedRowIds);
 
-    // For each selected row, insert a new row above it
-    // Insert in reverse order (from bottom to top) to maintain correct indices
+    // Insert n rows above the first selected row (where n = number of selected rows)
+    // All n rows should be inserted consecutively above the first selected row
+    const numRowsToInsert = sortedRowIds.length;
+    const firstRowId = sortedRowIds[0]; // First selected row (topmost)
+    const firstRow = allRowsForSelection.find(r => r.id === firstRowId);
+    
+    if (!firstRow) {
+      console.log('First selected row not found');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
     setIsSaving(true);
     try {
-      // Insert rows from bottom to top to avoid index shifting issues
-      for (let i = sortedRowIds.length - 1; i >= 0; i--) {
-        const rowId = sortedRowIds[i];
-        const row = allRowsForSelection.find(r => r.id === rowId);
+      if (supabase) {
+        // Query the first selected row's created_at to calculate insertion position
+        const { data: targetRowData, error: queryError } = await supabase
+          .from('library_assets')
+          .select('created_at')
+          .eq('id', firstRowId)
+          .single();
         
-        if (row && supabase) {
-          // Query the target row's created_at to calculate insertion position
-          const { data: targetRowData, error: queryError } = await supabase
-            .from('library_assets')
-            .select('created_at')
-            .eq('id', rowId)
-            .single();
+        if (queryError) {
+          console.error('Failed to query target row created_at:', queryError);
+          setBatchEditMenuVisible(false);
+          setBatchEditMenuPosition(null);
+          setIsSaving(false);
+          setToastMessage('Failed to insert rows above');
+          setTimeout(() => setToastMessage(null), 2000);
+          return;
+        }
+        
+        const targetCreatedAt = new Date(targetRowData.created_at);
+        
+        // Insert n rows above the first selected row
+        // Each row should have created_at = targetCreatedAt - (n - i) * 1000ms
+        // So the first inserted row has the earliest time (appears at the top)
+        // And the last inserted row has the time just before the target row
+        const createdTempIds: string[] = [];
+        for (let i = 0; i < numRowsToInsert; i++) {
+          // Calculate created_at: each row is 1 second before the next
+          // First row (i=0): targetCreatedAt - (numRowsToInsert * 1000)ms
+          // Last row (i=numRowsToInsert-1): targetCreatedAt - (1 * 1000)ms
+          const offsetMs = (numRowsToInsert - i) * 1000;
+          const newCreatedAt = new Date(targetCreatedAt.getTime() - offsetMs);
           
-          if (queryError) {
-            console.error('Failed to query target row created_at:', queryError);
-            // Fallback: use current time
-            const assetName = 'Untitled';
-            await onSaveAsset(assetName, {}, { createdAt: new Date() });
-            continue;
-          }
-          
-          // Calculate created_at for new row: set it to 1 second before target row
-          // This ensures it appears above the target row when sorted by created_at
-          const targetCreatedAt = new Date(targetRowData.created_at);
-          const newCreatedAt = new Date(targetCreatedAt.getTime() - 1000); // 1 second earlier
-          
-          // Create a blank asset above this row
           const assetName = 'Untitled'; // Required for database, but won't be displayed
           
           // Create optimistic asset row with temporary ID
           const tempId = `temp-insert-above-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`;
+          createdTempIds.push(tempId);
+          
           const optimisticAsset: AssetRow = {
             id: tempId,
             libraryId: library.id,
@@ -2339,9 +2357,11 @@ export function LibraryAssetsTable({
           });
           
           await onSaveAsset(assetName, {}, { createdAt: newCreatedAt });
-          
-          // Remove optimistic asset after parent refreshes (it should be inserted at the correct position by the database)
-          setTimeout(() => {
+        }
+        
+        // Clean up optimistic assets after parent refreshes
+        setTimeout(() => {
+          createdTempIds.forEach(tempId => {
             setOptimisticNewAssets(prev => {
               if (prev.has(tempId)) {
                 const newMap = new Map(prev);
@@ -2350,10 +2370,12 @@ export function LibraryAssetsTable({
               }
               return prev;
             });
-          }, 2000);
-        } else if (row) {
-          // Fallback if supabase is not available
-          const assetName = 'Untitled';
+          });
+        }, 2000);
+      } else {
+        // Fallback if supabase is not available
+        const assetName = 'Untitled';
+        for (let i = 0; i < numRowsToInsert; i++) {
           await onSaveAsset(assetName, {});
         }
       }
@@ -2424,41 +2446,59 @@ export function LibraryAssetsTable({
     console.log('Selected rows (sorted):', sortedRowIds.length, 'rows');
     console.log('Row IDs:', sortedRowIds);
 
-    // For each selected row, insert a new row below it
-    // Insert from bottom to top to avoid index shifting issues
+    // Insert n rows below the last selected row (where n = number of selected rows)
+    // All n rows should be inserted consecutively below the last selected row
+    const numRowsToInsert = sortedRowIds.length;
+    const lastRowId = sortedRowIds[sortedRowIds.length - 1]; // Last selected row (bottommost)
+    const lastRow = allRowsForSelection.find(r => r.id === lastRowId);
+    
+    if (!lastRow) {
+      console.log('Last selected row not found');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
     setIsSaving(true);
     try {
-      // Insert rows from bottom to top to maintain correct indices
-      for (let i = sortedRowIds.length - 1; i >= 0; i--) {
-        const rowId = sortedRowIds[i];
-        const row = allRowsForSelection.find(r => r.id === rowId);
+      if (supabase) {
+        // Query the last selected row's created_at to calculate insertion position
+        const { data: targetRowData, error: queryError } = await supabase
+          .from('library_assets')
+          .select('created_at')
+          .eq('id', lastRowId)
+          .single();
         
-        if (row && supabase) {
-          // Query the target row's created_at to calculate insertion position
-          const { data: targetRowData, error: queryError } = await supabase
-            .from('library_assets')
-            .select('created_at')
-            .eq('id', rowId)
-            .single();
+        if (queryError) {
+          console.error('Failed to query target row created_at:', queryError);
+          setBatchEditMenuVisible(false);
+          setBatchEditMenuPosition(null);
+          setIsSaving(false);
+          setToastMessage('Failed to insert rows below');
+          setTimeout(() => setToastMessage(null), 2000);
+          return;
+        }
+        
+        const targetCreatedAt = new Date(targetRowData.created_at);
+        
+        // Insert n rows below the last selected row
+        // Each row should have created_at = targetCreatedAt + (i + 1) * 1000ms
+        // So the first inserted row has the time just after the target row
+        // And the last inserted row has the latest time (appears at the bottom)
+        const createdTempIds: string[] = [];
+        for (let i = 0; i < numRowsToInsert; i++) {
+          // Calculate created_at: each row is 1 second after the previous
+          // First row (i=0): targetCreatedAt + (1 * 1000)ms
+          // Last row (i=numRowsToInsert-1): targetCreatedAt + (numRowsToInsert * 1000)ms
+          const offsetMs = (i + 1) * 1000;
+          const newCreatedAt = new Date(targetCreatedAt.getTime() + offsetMs);
           
-          if (queryError) {
-            console.error('Failed to query target row created_at:', queryError);
-            // Fallback: use current time
-            const assetName = 'Untitled';
-            await onSaveAsset(assetName, {}, { createdAt: new Date() });
-            continue;
-          }
-          
-          // Calculate created_at for new row: set it to 1 second after target row
-          // This ensures it appears below the target row when sorted by created_at
-          const targetCreatedAt = new Date(targetRowData.created_at);
-          const newCreatedAt = new Date(targetCreatedAt.getTime() + 1000); // 1 second later
-          
-          // Create a blank asset below this row
           const assetName = 'Untitled'; // Required for database, but won't be displayed
           
           // Create optimistic asset row with temporary ID
           const tempId = `temp-insert-below-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`;
+          createdTempIds.push(tempId);
+          
           const optimisticAsset: AssetRow = {
             id: tempId,
             libraryId: library.id,
@@ -2474,9 +2514,11 @@ export function LibraryAssetsTable({
           });
           
           await onSaveAsset(assetName, {}, { createdAt: newCreatedAt });
-          
-          // Remove optimistic asset after parent refreshes (it should be inserted at the correct position by the database)
-          setTimeout(() => {
+        }
+        
+        // Clean up optimistic assets after parent refreshes
+        setTimeout(() => {
+          createdTempIds.forEach(tempId => {
             setOptimisticNewAssets(prev => {
               if (prev.has(tempId)) {
                 const newMap = new Map(prev);
@@ -2485,10 +2527,12 @@ export function LibraryAssetsTable({
               }
               return prev;
             });
-          }, 2000);
-        } else if (row) {
-          // Fallback if supabase is not available
-          const assetName = 'Untitled';
+          });
+        }, 2000);
+      } else {
+        // Fallback if supabase is not available
+        const assetName = 'Untitled';
+        for (let i = 0; i < numRowsToInsert; i++) {
           await onSaveAsset(assetName, {});
         }
       }
