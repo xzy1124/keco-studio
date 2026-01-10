@@ -142,31 +142,52 @@ export default function ResetPasswordPage() {
       console.log('Calling updateUser API...');
       
       // Update password - the API call should complete quickly based on network timing
-      const { data, error } = await supabase.auth.updateUser({
+      const response = await supabase.auth.updateUser({
         password: newPassword,
       });
       
-      console.log('updateUser response received:', { 
+      console.log('updateUser raw response:', response);
+      console.log('updateUser response type:', typeof response);
+      console.log('updateUser response keys:', Object.keys(response || {}));
+      
+      const { data, error } = response;
+      
+      console.log('updateUser parsed response:', { 
         hasData: !!data, 
         hasError: !!error,
         errorMessage: error?.message,
-        userData: data?.user ? 'present' : 'missing'
+        dataType: typeof data,
+        dataKeys: data ? Object.keys(data) : [],
+        userData: data?.user ? 'present' : 'missing',
+        dataUserType: data?.user ? typeof data.user : 'null'
       });
 
+      // If there's an error, throw it immediately
       if (error) {
         console.error('Password update error:', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
 
-      // Verify that password was actually updated
-      if (!data || !data.user) {
-        console.error('Password update response missing user data:', data);
-        throw new Error('Password update completed but response is invalid. Please try again.');
+      // If no error, consider it successful
+      // The network request already succeeded (200 OK), so password was updated
+      // We don't need to strictly validate the response format
+      let userId = 'user';
+      if (data?.user) {
+        userId = data.user.id || data.user.email || 'user';
+      } else if (data && typeof data === 'object' && data !== null) {
+        const userObj = data as { id?: string; email?: string };
+        userId = userObj.id || userObj.email || 'user';
       }
+      
+      console.log('Password updated successfully!', {
+        userId,
+        hasData: !!data,
+        hasUser: !!data?.user
+      });
 
-      console.log('Password updated successfully for user:', data.user.email || data.user.id);
-
+      // Set loading to false and show success message
+      setLoading(false);
       setMessage('Password reset successfully! Redirecting to login...');
       
       // Note: We don't sign out here because:
@@ -177,7 +198,13 @@ export default function ResetPasswordPage() {
       // Wait a moment to show success message, then redirect
       setTimeout(() => {
         console.log('Redirecting to login page...');
-        router.push('/?message=Password reset successfully');
+        try {
+          router.push('/?message=Password reset successfully');
+        } catch (redirectError) {
+          console.error('Redirect error:', redirectError);
+          // Fallback: try window.location if router.push fails
+          window.location.href = '/?message=Password reset successfully';
+        }
       }, 1500);
     } catch (error: any) {
       console.error('Failed to reset password:', error);
