@@ -33,45 +33,55 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Try to get existing session first (don't force refresh on every request)
+  // Refresh session if expired - required for Server Components
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  // If session exists and is valid, sync to cookies
-  if (session?.user) {
-    // Store full session as JSON in cookie (for hybrid adapter)
-    const sessionJson = JSON.stringify({
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
-      expires_in: session.expires_in,
-      expires_at: session.expires_at,
-      token_type: session.token_type,
-      user: {
-        id: session.user.id,
-        email: session.user.email,
-      },
-    });
+  // If user is logged in, sync session to cookies for client-side access
+  if (user) {
+    // Sync session to cookies for client-side access
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     
-    response.cookies.set('sb-session', sessionJson, {
-      httpOnly: false, // Allow client-side access for hybrid adapter
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 365, // 1 year - let Supabase handle token expiry
-      path: '/',
-    });
-    
-    // Also set individual tokens for backward compatibility
-    response.cookies.set('sb-access-token', session.access_token, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 365, // 1 year
-      path: '/',
-    });
+    if (session) {
+      // Store full session as JSON in cookie (for hybrid adapter)
+      const sessionJson = JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_in: session.expires_in,
+        expires_at: session.expires_at,
+        token_type: session.token_type,
+        user: {
+          id: session.user.id,
+          email: session.user.email,
+        },
+      });
+      
+      response.cookies.set('sb-session', sessionJson, {
+        httpOnly: false, // Allow client-side access for hybrid adapter
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        path: '/',
+      });
+      
+      // Also set individual tokens for backward compatibility
+      response.cookies.set('sb-access-token', session.access_token, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7,
+        path: '/',
+      });
+    }
+  } else {
+    // Clear session cookies if no user
+    response.cookies.delete('sb-session');
+    response.cookies.delete('sb-access-token');
+    response.cookies.delete('sb-refresh-token');
   }
-  // Don't automatically clear cookies if no session - let client handle it
-  // This prevents clearing cookies during page transitions
 
   return response;
 }
