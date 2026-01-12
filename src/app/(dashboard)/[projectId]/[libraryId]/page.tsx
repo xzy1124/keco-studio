@@ -237,6 +237,8 @@ export default function LibraryPage() {
     // Refresh asset rows
     const rows = await getLibraryAssetsWithProperties(supabase, libraryId);
     setAssetRows(rows);
+    // Notify Sidebar to refresh assets for this library
+    window.dispatchEvent(new CustomEvent('assetUpdated', { detail: { libraryId } }));
   };
 
   // Callback for deleting asset from table
