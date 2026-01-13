@@ -1,7 +1,4 @@
 {
-  "name": "keco-studio",
-  "version": "0.1.0",
-  "private": true,
   "dependencies": {
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@dnd-kit/core": "^6.3.1",
