@@ -1121,7 +1121,9 @@ td.cellCut.cutBorderRight:hover {
   height: 59px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  position: relative;
 }
 
 .confirmModalWrap :global(.ant-modal-title) {
@@ -1157,6 +1159,7 @@ td.cellCut.cutBorderRight:hover {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  align-items: center;
 }
 
 .confirmModalWrap :global(.ant-modal-footer .ant-btn) {
@@ -1178,14 +1181,15 @@ td.cellCut.cutBorderRight:hover {
 }
 
 .confirmModalWrap :global(.ant-modal-footer .ant-btn-dangerous) {
-  background-color: #dc2626;
-  border-color: #dc2626;
-  color: #ffffff;
+  background-color: rgba(170, 5, 44, 1) !important;
+  border-color: rgba(170, 5, 44, 1) !important;
+  color: #ffffff !important;
+  border-radius: 12px !important;
 }
 
 .confirmModalWrap :global(.ant-modal-footer .ant-btn-dangerous:hover) {
-  background-color: #b91c1c;
-  border-color: #b91c1c;
+  background-color: rgba(140, 4, 36, 1) !important;
+  border-color: rgba(140, 4, 36, 1) !important;
 }
 
 .confirmModalWrap :global(.ant-modal-close) {
@@ -1196,10 +1200,22 @@ td.cellCut.cutBorderRight:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: absolute;
 }
 
 .confirmModalWrap :global(.ant-modal-close:hover) {
   background-color: #f3f4f6;
   border-radius: 4px;
+}
+
+.confirmModalWrap :global(.ant-modal-header) {
+  border-bottom: 1px solid rgba(222, 226, 230, 1);
+  padding: 16px;
+  height: 59px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: relative;
 }
 
