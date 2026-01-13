@@ -6,11 +6,13 @@ on:
       - main      
       - master
       - release
+      - 'release/**'
   pull_request:
     branches:
       - main
       - master
       - release
+      - 'release/**'
     types: [opened, synchronize, reopened]  
 
 jobs:
@@ -83,8 +85,8 @@ jobs:
               echo "access-token=$GENERAL_TOKEN" >> $GITHUB_OUTPUT
               echo "✅ 使用 Production Supabase 项目 (通用 Token)"
             fi
-          elif [[ "${{ github.ref }}" == "refs/heads/release" ]]; then
-            # release 分支使用 Preview 环境
+          elif [[ "${{ github.ref }}" =~ ^refs/heads/release ]]; then
+            # release 分支（包括 release/**）使用 Preview 环境
             echo "project-ref=${{ secrets.SUPABASE_PROJECT_REF_PREVIEW }}" >> $GITHUB_OUTPUT
             echo "environment=preview" >> $GITHUB_OUTPUT
             # 如果配置了单独的 Preview Token，使用它；否则使用通用的 Token
@@ -162,8 +164,8 @@ jobs:
             echo "is_prod=true" >> $GITHUB_OUTPUT
             echo "deployment_target=production" >> $GITHUB_OUTPUT
             echo "✅ 部署到 Production 环境 (main 分支)"
-          elif [[ "${{ github.ref }}" == "refs/heads/release" ]]; then
-            # release 分支部署到 Preview 环境
+          elif [[ "${{ github.ref }}" =~ ^refs/heads/release ]]; then
+            # release 分支（包括 release/**）部署到 Preview 环境
             echo "environment=preview" >> $GITHUB_OUTPUT
             echo "is_prod=false" >> $GITHUB_OUTPUT
             echo "deployment_target=preview" >> $GITHUB_OUTPUT
