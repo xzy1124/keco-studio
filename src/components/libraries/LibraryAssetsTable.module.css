@@ -103,7 +103,16 @@
 }
 
 .cell:hover {
-  background-color: #f9fafb;
+  background-color: transparent;
+}
+
+/* When row is hovered, cells should inherit row background */
+.row:hover .cell {
+  background-color: rgba(151, 71, 255, 0.09) !important;
+}
+
+.row:hover .cell:hover {
+  background-color: rgba(151, 71, 255, 0.09) !important;
 }
 
 .cellSelected {
@@ -335,7 +344,6 @@ td.cellCut.cutBorderRight:hover {
 
 .row:hover {
   background-color: rgba(151, 71, 255, 0.09) !important;
-  background: #f9fafb;
 }
 
 /* Number column styles */
