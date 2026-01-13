@@ -26,6 +26,7 @@ import noassetIcon1 from '@/app/assets/images/NoassetIcon1.svg';
 import noassetIcon2 from '@/app/assets/images/NoassetIcon2.svg';
 import libraryAssetTableAddIcon from '@/app/assets/images/LibraryAssetTableAddIcon.svg';
 import libraryAssetTableSelectIcon from '@/app/assets/images/LibraryAssetTableSelectIcon.svg';
+import batchEditAddIcon from '@/app/assets/images/BatchEditAddIcon.svg';
 import styles from './LibraryAssetsTable.module.css';
 
 export type LibraryAssetsTableProps = {
@@ -37,7 +38,7 @@ export type LibraryAssetsTableProps = {
   sections: SectionConfig[];
   properties: PropertyConfig[];
   rows: AssetRow[];
-  onSaveAsset?: (assetName: string, propertyValues: Record<string, any>) => Promise<void>;
+  onSaveAsset?: (assetName: string, propertyValues: Record<string, any>, options?: { createdAt?: Date }) => Promise<void>;
   onUpdateAsset?: (assetId: string, assetName: string, propertyValues: Record<string, any>) => Promise<void>;
   onDeleteAsset?: (assetId: string) => Promise<void>;
 };
@@ -73,6 +74,28 @@ export function LibraryAssetsTable({
   // Context menu state for right-click delete
   const [contextMenuRowId, setContextMenuRowId] = useState<string | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  
+  // Batch edit context menu state
+  const [batchEditMenuVisible, setBatchEditMenuVisible] = useState(false);
+  const [batchEditMenuPosition, setBatchEditMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  
+  // Cut/Copy/Paste state
+  const [cutCells, setCutCells] = useState<Set<CellKey>>(new Set()); // Cells that have been cut (for dashed border)
+  const [clipboardData, setClipboardData] = useState<Array<Array<string | number | null>> | null>(null); // Clipboard data for paste
+  const [isCutOperation, setIsCutOperation] = useState(false); // Whether clipboard contains cut data (vs copy)
+  
+  // Store cut selection bounds for border rendering
+  const [cutSelectionBounds, setCutSelectionBounds] = useState<{
+    minRowIndex: number;
+    maxRowIndex: number;
+    minPropertyIndex: number;
+    maxPropertyIndex: number;
+    rowIds: string[];
+    propertyKeys: string[];
+  } | null>(null);
+  
+  // Toast message state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   
@@ -87,9 +110,37 @@ export function LibraryAssetsTable({
   // Format: { rowId: { name, propertyValues } }
   const [optimisticEditUpdates, setOptimisticEditUpdates] = useState<Map<string, { name: string; propertyValues: Record<string, any> }>>(new Map());
 
+  // Create a string representation of rows for dependency tracking
+  // This ensures we detect changes even if the array reference doesn't change
+  const rowsSignature = useMemo(() => {
+    return rows.map(r => `${r.id}:${r.name}`).join('|');
+  }, [rows]);
+
   // Clean up optimistic assets when rows are updated (parent refresh)
   // This ensures that when a real asset is added/updated from the parent, we remove the optimistic one
   useEffect(() => {
+    // Clear all optimistic edit updates when rows prop changes
+    // This ensures external updates (e.g., from sidebar) always override optimistic updates
+    // The parent component will provide the updated data, so we should use it
+    setOptimisticEditUpdates(prev => {
+      if (prev.size === 0) return prev;
+      
+      // Clear optimistic updates for all assets that exist in the new rows
+      const newMap = new Map(prev);
+      let hasChanges = false;
+      const clearedIds: string[] = [];
+      
+      for (const row of rows) {
+        if (newMap.has(row.id)) {
+          newMap.delete(row.id);
+          clearedIds.push(row.id);
+          hasChanges = true;
+        }
+      }
+      
+      return hasChanges ? newMap : prev;
+    });
+    
     let hasChanges = false;
     
     // Clean up optimistic new assets
@@ -150,34 +201,31 @@ export function LibraryAssetsTable({
       });
     }
     
-    // Clean up optimistic edit updates
-    if (optimisticEditUpdates.size > 0) {
-      setOptimisticEditUpdates(prev => {
-        const newMap = new Map(prev);
-        
-        for (const [rowId, optimisticUpdate] of newMap.entries()) {
-          const foundRow = rows.find((row) => (row as AssetRow).id === rowId);
-          if (foundRow) {
-            const realRow = foundRow as AssetRow;
-            // Check if the real row matches the optimistic update (indicating parent has refreshed)
-            // Compare name and property values to see if they match
-            const nameMatches = realRow.name === optimisticUpdate.name;
-            const valuesMatch = Object.keys(optimisticUpdate.propertyValues).every(key => {
-              return realRow.propertyValues[key] === optimisticUpdate.propertyValues[key];
-            });
-            
-            // If they match, remove the optimistic update as parent has refreshed
-            if (nameMatches && valuesMatch) {
-              newMap.delete(rowId);
-              hasChanges = true;
-            }
-          }
+    // Also clear optimistic updates where the name doesn't match the row name
+    // This handles the case where external updates happened but the effect didn't catch it
+    setOptimisticEditUpdates(prev => {
+      if (prev.size === 0) return prev;
+      
+      const newMap = new Map(prev);
+      let hasChanges = false;
+      const staleIds: string[] = [];
+      
+      for (const [assetId, optimisticUpdate] of newMap.entries()) {
+        const row = rows.find(r => r.id === assetId);
+        if (row && row.name !== optimisticUpdate.name) {
+          // Name doesn't match, so this optimistic update is stale
+          newMap.delete(assetId);
+          staleIds.push(assetId);
+          hasChanges = true;
         }
-        
-        return hasChanges ? newMap : prev;
-      });
-    }
-  }, [rows, optimisticNewAssets.size, optimisticEditUpdates.size]);
+      }
+      
+      return hasChanges ? newMap : prev;
+    });
+    
+    // Note: optimistic edit updates are already cleared at the beginning of this effect
+    // when rows prop changes, so we don't need to clear them again here
+  }, [rows, rowsSignature, optimisticNewAssets.size]);
 
   // Ref for table container to detect clicks outside
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -190,6 +238,18 @@ export function LibraryAssetsTable({
   
   // Asset names cache for display
   const [assetNamesCache, setAssetNamesCache] = useState<Record<string, string>>({});
+
+  // Row selection state (for checkbox selection)
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+  
+  // Cell selection state (for drag selection)
+  type CellKey = `${string}-${string}`; // Format: "rowId-propertyKey"
+  const [selectedCells, setSelectedCells] = useState<Set<CellKey>>(new Set());
+  const [dragStartCell, setDragStartCell] = useState<{ rowId: string; propertyKey: string } | null>(null);
+  const [dragCurrentCell, setDragCurrentCell] = useState<{ rowId: string; propertyKey: string } | null>(null);
+  const isDraggingCellsRef = useRef(false);
+  const dragCurrentCellRef = useRef<{ rowId: string; propertyKey: string } | null>(null);
 
   // Hover state for asset card
   const [hoveredAssetId, setHoveredAssetId] = useState<string | null>(null);
@@ -353,6 +413,45 @@ export function LibraryAssetsTable({
     
     loadAssetNames();
   }, [rows, editingRowData, newRowData, properties, editingRowId, isAddingRow, supabase]);
+
+  // Listen for asset updates to refresh asset names cache and clear optimistic updates
+  useEffect(() => {
+    const handleAssetUpdated = async (event: Event) => {
+      const customEvent = event as CustomEvent<{ assetId: string; libraryId?: string }>;
+      if (customEvent.detail?.assetId) {
+        try {
+          // Refresh the specific asset name in cache
+          const { data, error } = await supabase
+            .from('library_assets')
+            .select('id, name')
+            .eq('id', customEvent.detail.assetId)
+            .single();
+          
+          if (!error && data) {
+            setAssetNamesCache(prev => ({ ...prev, [data.id]: data.name }));
+            // Clear optimistic update for this asset since we have the real data now
+            // The parent component will refresh rows prop with updated data
+            setOptimisticEditUpdates(prev => {
+              const newMap = new Map(prev);
+              if (newMap.has(customEvent.detail.assetId)) {
+                newMap.delete(customEvent.detail.assetId);
+                return newMap;
+              }
+              return prev;
+            });
+          }
+        } catch (error) {
+          console.error('Failed to refresh asset name:', error);
+        }
+      }
+    };
+
+    window.addEventListener('assetUpdated', handleAssetUpdated as EventListener);
+
+    return () => {
+      window.removeEventListener('assetUpdated', handleAssetUpdated as EventListener);
+    };
+  }, [supabase]);
 
   // Handle mouse enter on avatar - use useCallback to prevent recreating on each render
   const handleAvatarMouseEnter = useCallback((assetId: string, element: HTMLDivElement) => {
@@ -826,9 +925,66 @@ export function LibraryAssetsTable({
               setIsSaving(false);
             }
           } else if (!hasData) {
-            // If no data, just cancel
-            setIsAddingRow(false);
-            setNewRowData({});
+            // If no data, still create a blank row (for paste operations or manual editing later)
+            // This allows users to create empty rows that can be used for paste
+            if (onSaveAsset && library) {
+              // Create a blank asset with empty name (will display as blank, not "Untitled")
+              // Note: We still need to pass a name to onSaveAsset for database constraint,
+              // but the display will be empty
+              const assetName = 'Untitled'; // Required for database, but won't be displayed
+              
+              // Create optimistic asset row with temporary ID
+              const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              const optimisticAsset: AssetRow = {
+                id: tempId,
+                libraryId: library.id,
+                name: assetName,
+                propertyValues: {}, // Empty property values
+              };
+
+              // Optimistically add the blank asset to the display immediately
+              setOptimisticNewAssets(prev => {
+                const newMap = new Map(prev);
+                newMap.set(tempId, optimisticAsset);
+                return newMap;
+              });
+
+              // Reset adding state immediately
+              setIsAddingRow(false);
+              setNewRowData({});
+              
+              setIsSaving(true);
+              try {
+                await onSaveAsset(assetName, {});
+                // Remove optimistic asset after parent refreshes
+                setTimeout(() => {
+                  setOptimisticNewAssets(prev => {
+                    if (prev.has(tempId)) {
+                      const newMap = new Map(prev);
+                      newMap.delete(tempId);
+                      return newMap;
+                    }
+                    return prev;
+                  });
+                }, 2000);
+              } catch (error) {
+                console.error('Failed to save blank asset:', error);
+                // On error, revert optimistic update
+                setOptimisticNewAssets(prev => {
+                  const newMap = new Map(prev);
+                  newMap.delete(tempId);
+                  return newMap;
+                });
+                // Restore adding state so user can try again
+                setIsAddingRow(true);
+              } finally {
+                setIsSaving(false);
+              }
+            } else {
+              // If no onSaveAsset callback, just cancel (shouldn't happen in normal usage)
+              setIsAddingRow(false);
+              setNewRowData({});
+            }
           }
         }
         
@@ -1007,6 +1163,44 @@ export function LibraryAssetsTable({
     }
   };
 
+  // Calculate ordered properties early (needed for cell selection)
+  const { groups, orderedProperties } = useMemo(() => {
+    const byId = new Map<string, SectionConfig>();
+    sections.forEach((s) => byId.set(s.id, s));
+
+    const groupMap = new Map<
+      string,
+      {
+        section: SectionConfig;
+        properties: PropertyConfig[];
+      }
+    >();
+
+    for (const prop of properties) {
+      const section = byId.get(prop.sectionId);
+      if (!section) continue;
+
+      let group = groupMap.get(section.id);
+      if (!group) {
+        group = { section, properties: [] };
+        groupMap.set(section.id, group);
+      }
+      group.properties.push(prop);
+    }
+
+    const groups = Array.from(groupMap.values()).sort(
+      (a, b) => a.section.orderIndex - b.section.orderIndex
+    );
+
+    groups.forEach((g) => {
+      g.properties.sort((a, b) => a.orderIndex - b.orderIndex);
+    });
+
+    const orderedProperties = groups.flatMap((g) => g.properties);
+
+    return { groups, orderedProperties };
+  }, [sections, properties]);
+
   // Handle navigate to predefine page
   const handlePredefineClick = () => {
     const projectId = params.projectId as string;
@@ -1014,15 +1208,1349 @@ export function LibraryAssetsTable({
     router.push(`/${projectId}/${libraryId}/predefine`);
   };
 
+  // Handle row selection toggle
+  const handleRowSelectionToggle = (rowId: string, e?: React.MouseEvent | MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setSelectedRowIds(prev => {
+      const next = new Set(prev);
+      if (next.has(rowId)) {
+        next.delete(rowId);
+      } else {
+        next.add(rowId);
+      }
+      return next;
+    });
+  };
+
+  // Get all rows for cell selection (helper function)
+  const getAllRowsForCellSelection = useCallback(() => {
+    const allRowsForSelection = rows
+      .filter((row): row is AssetRow => !deletedAssetIds.has(row.id))
+      .map((row): AssetRow => {
+        const assetRow = row as AssetRow;
+        const optimisticUpdate = optimisticEditUpdates.get(assetRow.id);
+        if (optimisticUpdate && optimisticUpdate.name === assetRow.name) {
+          return {
+            ...assetRow,
+            name: optimisticUpdate.name,
+            propertyValues: { ...assetRow.propertyValues, ...optimisticUpdate.propertyValues }
+          };
+        }
+        return assetRow;
+      });
+    
+    const optimisticAssets: AssetRow[] = Array.from(optimisticNewAssets.values());
+    allRowsForSelection.push(...optimisticAssets);
+    
+    return allRowsForSelection;
+  }, [rows, deletedAssetIds, optimisticEditUpdates, optimisticNewAssets]);
+
+  // Handle cell click (select single cell)
+  const handleCellClick = (rowId: string, propertyKey: string, e: React.MouseEvent) => {
+    // Don't select if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || 
+        target.closest('.ant-checkbox') || 
+        target.closest('.ant-select') ||
+        target.closest('.ant-switch') ||
+        target.closest('input') ||
+        target.closest('select') ||
+        target.closest('.cellExpandIcon')) {
+      return;
+    }
+    
+    e.stopPropagation();
+    
+    // Select single cell
+    const cellKey: CellKey = `${rowId}-${propertyKey}` as CellKey;
+    setSelectedCells(new Set<CellKey>([cellKey]));
+    setDragStartCell({ rowId, propertyKey });
+    setDragCurrentCell(null);
+  };
+
+  // Handle cell drag selection start (from expand icon)
+  const handleCellDragStart = (rowId: string, propertyKey: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    isDraggingCellsRef.current = true;
+    const startCell = { rowId, propertyKey };
+    setDragStartCell(startCell);
+    setDragCurrentCell(startCell);
+    dragCurrentCellRef.current = startCell;
+    
+    // Create handlers for drag move and end
+    const dragMoveHandler = (moveEvent: MouseEvent) => {
+      if (!isDraggingCellsRef.current) return;
+      
+      // Use the captured values from closure
+      const startRowId = rowId;
+      const startPropertyKey = propertyKey;
+      
+      // Find the cell under the cursor
+      const elementBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      if (!elementBelow) return;
+      
+      const cellElement = elementBelow.closest('td');
+      if (!cellElement) return;
+      
+      // Get row and property info from data attributes
+      const rowElement = cellElement.closest('tr');
+      if (!rowElement || 
+          rowElement.classList.contains('headerRowTop') || 
+          rowElement.classList.contains('headerRowBottom') || 
+          rowElement.classList.contains('editRow') ||
+          rowElement.classList.contains('addRow')) {
+        return;
+      }
+      
+      const currentRowId = rowElement.getAttribute('data-row-id');
+      const currentPropertyKey = cellElement.getAttribute('data-property-key');
+      
+      if (currentRowId && currentPropertyKey) {
+        const newCell = { rowId: currentRowId, propertyKey: currentPropertyKey };
+        dragCurrentCellRef.current = newCell;
+        setDragCurrentCell(newCell);
+      }
+    };
+    
+    const dragEndHandler = (endEvent: MouseEvent) => {
+      if (!isDraggingCellsRef.current) {
+        return;
+      }
+      
+      isDraggingCellsRef.current = false;
+      document.removeEventListener('mousemove', dragMoveHandler);
+      document.removeEventListener('mouseup', dragEndHandler);
+      document.body.style.userSelect = '';
+      
+      // Get all rows and properties for selection
+      const allRowsForSelection = getAllRowsForCellSelection();
+      // Use captured values from closure
+      const startRowId = rowId;
+      const startPropertyKey = propertyKey;
+      // Get current end from ref (updated by dragMoveHandler)
+      const endCell = dragCurrentCellRef.current || { rowId: startRowId, propertyKey: startPropertyKey };
+      const endRowId = endCell.rowId;
+      const endPropertyKey = endCell.propertyKey;
+      
+      // Find start and end indices
+      const startRowIndex = allRowsForSelection.findIndex(r => r.id === startRowId);
+      const endRowIndex = allRowsForSelection.findIndex(r => r.id === endRowId);
+      
+      // Find property indices in orderedProperties
+      const startPropertyIndex = orderedProperties.findIndex(p => p.key === startPropertyKey);
+      const endPropertyIndex = orderedProperties.findIndex(p => p.key === endPropertyKey);
+      
+      if (startRowIndex !== -1 && endRowIndex !== -1 && 
+          startPropertyIndex !== -1 && endPropertyIndex !== -1) {
+        // Select all cells in the rectangle
+        const rowStart = Math.min(startRowIndex, endRowIndex);
+        const rowEnd = Math.max(startRowIndex, endRowIndex);
+        const propStart = Math.min(startPropertyIndex, endPropertyIndex);
+        const propEnd = Math.max(startPropertyIndex, endPropertyIndex);
+        
+        const cellsToSelect = new Set<CellKey>();
+        
+        for (let r = rowStart; r <= rowEnd; r++) {
+          const row = allRowsForSelection[r];
+          for (let p = propStart; p <= propEnd; p++) {
+            const property = orderedProperties[p];
+            cellsToSelect.add(`${row.id}-${property.key}`);
+          }
+        }
+        
+        setSelectedCells(cellsToSelect);
+      } else {
+        // Fallback: just select the start cell
+        setSelectedCells(new Set<CellKey>([`${startRowId}-${startPropertyKey}` as CellKey]));
+      }
+      
+      setDragStartCell(null);
+      setDragCurrentCell(null);
+      dragCurrentCellRef.current = null;
+    };
+    
+    // Add event listeners
+    document.addEventListener('mousemove', dragMoveHandler);
+    document.addEventListener('mouseup', dragEndHandler);
+    
+    // Prevent text selection during drag
+    document.body.style.userSelect = 'none';
+  };
+
+  // Update selected cells during drag (for visual feedback)
+  useEffect(() => {
+    if (!isDraggingCellsRef.current || !dragStartCell || !dragCurrentCell) {
+      return;
+    }
+    
+    const allRowsForSelection = getAllRowsForCellSelection();
+    const startRowId = dragStartCell.rowId;
+    const startPropertyKey = dragStartCell.propertyKey;
+    const endRowId = dragCurrentCell.rowId;
+    const endPropertyKey = dragCurrentCell.propertyKey;
+    
+    // Find indices
+    const startRowIndex = allRowsForSelection.findIndex(r => r.id === startRowId);
+    const endRowIndex = allRowsForSelection.findIndex(r => r.id === endRowId);
+    const startPropertyIndex = orderedProperties.findIndex(p => p.key === startPropertyKey);
+    const endPropertyIndex = orderedProperties.findIndex(p => p.key === endPropertyKey);
+    
+    if (startRowIndex !== -1 && endRowIndex !== -1 && 
+        startPropertyIndex !== -1 && endPropertyIndex !== -1) {
+      const rowStart = Math.min(startRowIndex, endRowIndex);
+      const rowEnd = Math.max(startRowIndex, endRowIndex);
+      const propStart = Math.min(startPropertyIndex, endPropertyIndex);
+      const propEnd = Math.max(startPropertyIndex, endPropertyIndex);
+      
+      const cellsToSelect = new Set<CellKey>();
+      
+      for (let r = rowStart; r <= rowEnd; r++) {
+        const row = allRowsForSelection[r];
+        for (let p = propStart; p <= propEnd; p++) {
+          const property = orderedProperties[p];
+          cellsToSelect.add(`${row.id}-${property.key}`);
+        }
+      }
+      
+      setSelectedCells(cellsToSelect);
+    }
+  }, [dragStartCell, dragCurrentCell, getAllRowsForCellSelection, orderedProperties]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.userSelect = '';
+    };
+  }, []);
+
+  // Close batch edit menu when clicking outside
+  useEffect(() => {
+    if (!batchEditMenuVisible) return;
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.batchEditMenu')) {
+        setBatchEditMenuVisible(false);
+        setBatchEditMenuPosition(null);
+      }
+    };
+    
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setBatchEditMenuVisible(false);
+        setBatchEditMenuPosition(null);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [batchEditMenuVisible]);
+
   // Handle right-click context menu
   const handleRowContextMenu = (e: React.MouseEvent, row: AssetRow) => {
     e.preventDefault();
     e.stopPropagation();
     
-    // Always show context menu, even if onDeleteAsset is not provided
+    // If there are selected cells, show batch edit menu instead of row delete menu
+    if (selectedCells.size > 0) {
+      setBatchEditMenuVisible(true);
+      setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
+      return;
+    }
+    
+    // Otherwise show normal row context menu
     setContextMenuRowId(row.id);
     setContextMenuPosition({ x: e.clientX, y: e.clientY });
   };
+
+  // Handle cell right-click for batch edit
+  const handleCellContextMenu = (e: React.MouseEvent, rowId: string, propertyKey: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // If this cell is not selected, select it first
+    const cellKey: CellKey = `${rowId}-${propertyKey}` as CellKey;
+    if (!selectedCells.has(cellKey)) {
+      setSelectedCells(new Set([cellKey]));
+    }
+    
+    // Show batch edit menu
+    setBatchEditMenuVisible(true);
+    setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
+  };
+
+  // Helper function to check if a cell is on the border of cut selection
+  const getCutBorderClasses = useCallback((rowId: string, propertyIndex: number): string => {
+    if (!cutSelectionBounds || !cutCells.has(`${rowId}-${orderedProperties[propertyIndex].key}` as CellKey)) {
+      return '';
+    }
+    
+    const allRowsForSelection = getAllRowsForCellSelection();
+    const rowIndex = allRowsForSelection.findIndex(r => r.id === rowId);
+    
+    if (rowIndex === -1) return '';
+    
+    const { minRowIndex, maxRowIndex, minPropertyIndex, maxPropertyIndex } = cutSelectionBounds;
+    const isTop = rowIndex === minRowIndex;
+    const isBottom = rowIndex === maxRowIndex;
+    const isLeft = propertyIndex === minPropertyIndex;
+    const isRight = propertyIndex === maxPropertyIndex;
+    
+    const classes: string[] = [];
+    if (isTop) classes.push(styles.cutBorderTop);
+    if (isBottom) classes.push(styles.cutBorderBottom);
+    if (isLeft) classes.push(styles.cutBorderLeft);
+    if (isRight) classes.push(styles.cutBorderRight);
+    
+    return classes.join(' ');
+  }, [cutSelectionBounds, cutCells, orderedProperties, getAllRowsForCellSelection]);
+
+  // Handle Cut operation
+  const handleCut = useCallback(() => {
+    console.log('handleCut called, selectedCells:', selectedCells);
+    
+    if (selectedCells.size === 0) {
+      console.log('No cells selected');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Get all rows for selection
+    const allRowsForSelection = getAllRowsForCellSelection();
+    console.log('allRowsForSelection:', allRowsForSelection.length, 'rows');
+    console.log('orderedProperties:', orderedProperties.length, 'properties');
+    
+    // Group selected cells by row to build a 2D array
+    const cellsByRow = new Map<string, Array<{ propertyKey: string; rowId: string; value: string | number | null }>>();
+    const validCells: CellKey[] = [];
+
+    // Check each selected cell and validate data type
+    selectedCells.forEach((cellKey) => {
+      // cellKey format: "${row.id}-${property.key}"
+      // Both row.id and property.key can be UUIDs containing multiple '-'
+      // Strategy: try matching each property.key from the end of cellKey
+      let rowId = '';
+      let propertyKey = '';
+      let foundProperty = null;
+      
+      // Try each property.key to find a match (starting from the end)
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          // Found a match: cellKey ends with "-{property.key}"
+          rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+          propertyKey = property.key;
+          foundProperty = property;
+          break;
+        }
+      }
+      
+      if (!foundProperty) {
+        console.log('Could not find matching property for cellKey:', cellKey);
+        console.log('Available property keys with dataTypes:', orderedProperties.map(p => `${p.key} (${p.dataType || 'undefined'})`));
+        console.log('Debug: checking matches...');
+        // Debug: show what we're trying to match
+        orderedProperties.forEach(p => {
+          const propertyKeyWithDash = '-' + p.key;
+          const matches = cellKey.endsWith(propertyKeyWithDash);
+          if (matches) {
+            console.log(`  ✓ Match found: "${propertyKeyWithDash}" matches cellKey ending`);
+          }
+        });
+        return;
+      }
+      
+      console.log('Processing cell - rowId:', rowId, 'propertyKey:', propertyKey);
+      console.log('Property found:', foundProperty.key, 'dataType (from predefine):', foundProperty.dataType);
+      
+      // Check if data type is supported (string, int, float)
+      // Note: dataType is defined during predefine (预定义时定义), we check the predefine type, not dynamic validation
+      if (!foundProperty.dataType) {
+        console.log('Property has no dataType defined in predefine, skipping');
+        return;
+      }
+      
+      const supportedTypes = ['string', 'int', 'float'];
+      if (!supportedTypes.includes(foundProperty.dataType)) {
+        console.log('Unsupported data type (from predefine):', foundProperty.dataType, '- only string/int/float are supported for cut/copy/paste');
+        return; // Skip unsupported types
+      }
+      
+      // Find the row
+      const row = allRowsForSelection.find(r => r.id === rowId);
+      if (!row) {
+        console.log('Row not found:', rowId);
+        return;
+      }
+      
+      // Get the cell value
+      let rawValue = row.propertyValues[propertyKey];
+      let value: string | number | null = null;
+      
+      // Convert to appropriate type based on property data type
+      if (rawValue !== null && rawValue !== undefined && rawValue !== '') {
+        if (foundProperty.dataType === 'int') {
+          const numValue = parseInt(String(rawValue), 10);
+          value = isNaN(numValue) ? null : numValue;
+        } else if (foundProperty.dataType === 'float') {
+          const numValue = parseFloat(String(rawValue));
+          value = isNaN(numValue) ? null : numValue;
+        } else if (foundProperty.dataType === 'string') {
+          value = String(rawValue);
+        }
+      }
+      
+      console.log('Cell value:', value);
+      
+      if (!cellsByRow.has(rowId)) {
+        cellsByRow.set(rowId, []);
+      }
+      cellsByRow.get(rowId)!.push({ propertyKey, rowId, value });
+      validCells.push(cellKey);
+    });
+
+    console.log('Valid cells found:', validCells.length);
+
+    if (validCells.length === 0) {
+      console.log('No valid cells to cut - no supported data types found');
+      // Still show feedback even if no valid cells
+      setToastMessage('No cells with supported types (string, int, float) selected');
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2000);
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Build 2D array (rows x columns) for clipboard
+    // Find the range of rows and columns
+    const rowIds = Array.from(cellsByRow.keys());
+    const propertyKeys = new Set<string>();
+    validCells.forEach(cellKey => {
+      // Find property key using the same method as above (match from end)
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          propertyKeys.add(property.key);
+          break;
+        }
+      }
+    });
+    
+    // Sort rows by their index in allRowsForSelection
+    rowIds.sort((a, b) => {
+      const indexA = allRowsForSelection.findIndex(r => r.id === a);
+      const indexB = allRowsForSelection.findIndex(r => r.id === b);
+      return indexA - indexB;
+    });
+    
+    // Sort properties by their index in orderedProperties
+    const sortedPropertyKeys = Array.from(propertyKeys).sort((a, b) => {
+      const indexA = orderedProperties.findIndex(p => p.key === a);
+      const indexB = orderedProperties.findIndex(p => p.key === b);
+      return indexA - indexB;
+    });
+    
+    // Calculate selection bounds for border rendering (only show outer border)
+    const rowIndices = rowIds.map(rowId => {
+      return allRowsForSelection.findIndex(r => r.id === rowId);
+    }).filter(idx => idx !== -1);
+    
+    const propertyIndices = sortedPropertyKeys.map(propKey => {
+      return orderedProperties.findIndex(p => p.key === propKey);
+    }).filter(idx => idx !== -1);
+    
+    const minRowIndex = Math.min(...rowIndices);
+    const maxRowIndex = Math.max(...rowIndices);
+    const minPropertyIndex = Math.min(...propertyIndices);
+    const maxPropertyIndex = Math.max(...propertyIndices);
+    
+    // Build 2D array
+    const clipboardArray: Array<Array<string | number | null>> = [];
+    rowIds.forEach(rowId => {
+      const row = allRowsForSelection.find(r => r.id === rowId);
+      if (!row) return;
+      
+      const rowData: Array<string | number | null> = [];
+      sortedPropertyKeys.forEach(propertyKey => {
+        const cell = cellsByRow.get(rowId)?.find(c => c.propertyKey === propertyKey);
+        rowData.push(cell?.value ?? null);
+      });
+      clipboardArray.push(rowData);
+    });
+    
+    // Copy to clipboard (as tab-separated values for Excel-like behavior)
+    const clipboardText = clipboardArray
+      .map(row => row.map(cell => cell === null ? '' : String(cell)).join('\t'))
+      .join('\n');
+    
+    // Try to copy to system clipboard
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(clipboardText).catch(err => {
+        console.error('Failed to copy to clipboard:', err);
+      });
+    }
+    
+    // Store clipboard data and mark as cut operation
+    setClipboardData(clipboardArray);
+    setIsCutOperation(true);
+    
+    // Mark cells as cut (for dashed border visual feedback)
+    console.log('Setting cutCells with', validCells.length, 'cells:', Array.from(validCells));
+    setCutCells(new Set(validCells));
+    
+    // Store selection bounds for border rendering (only show outer border)
+    if (rowIndices.length > 0 && propertyIndices.length > 0) {
+      setCutSelectionBounds({
+        minRowIndex,
+        maxRowIndex,
+        minPropertyIndex,
+        maxPropertyIndex,
+        rowIds,
+        propertyKeys: sortedPropertyKeys,
+      });
+    }
+    
+    // Show toast message immediately
+    console.log('Setting toast message: Content cut');
+    setToastMessage('Content cut');
+    
+    // Close menu first
+    setBatchEditMenuVisible(false);
+    setBatchEditMenuPosition(null);
+    
+    // Auto-hide toast after 2 seconds
+    setTimeout(() => {
+      console.log('Clearing toast message');
+      setToastMessage(null);
+    }, 2000);
+  }, [selectedCells, getAllRowsForCellSelection, orderedProperties]);
+
+  // Handle Copy operation
+  const handleCopy = useCallback(() => {
+    console.log('handleCopy called, selectedCells:', selectedCells);
+    
+    if (selectedCells.size === 0) {
+      console.log('No cells selected');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Get all rows for selection
+    const allRowsForSelection = getAllRowsForCellSelection();
+    console.log('allRowsForSelection:', allRowsForSelection.length, 'rows');
+    console.log('orderedProperties:', orderedProperties.length, 'properties');
+    
+    // Group selected cells by row to build a 2D array
+    const cellsByRow = new Map<string, Array<{ propertyKey: string; rowId: string; value: string | number | null }>>();
+    const validCells: CellKey[] = [];
+
+    // Check each selected cell and validate data type
+    selectedCells.forEach((cellKey) => {
+      // cellKey format: "${row.id}-${property.key}"
+      // Both row.id and property.key can be UUIDs containing multiple '-'
+      // Strategy: try matching each property.key from the end of cellKey
+      let rowId = '';
+      let propertyKey = '';
+      let foundProperty = null;
+      
+      // Try each property.key to find a match (starting from the end)
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          // Found a match: cellKey ends with "-{property.key}"
+          rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+          propertyKey = property.key;
+          foundProperty = property;
+          break;
+        }
+      }
+      
+      if (!foundProperty) {
+        console.log('Could not find matching property for cellKey:', cellKey);
+        console.log('Available property keys with dataTypes:', orderedProperties.map(p => `${p.key} (${p.dataType || 'undefined'})`));
+        return;
+      }
+      
+      console.log('Processing cell - rowId:', rowId, 'propertyKey:', propertyKey);
+      console.log('Property found:', foundProperty.key, 'dataType (from predefine):', foundProperty.dataType);
+      
+      // Check if data type is supported (string, int, float)
+      // Note: dataType is defined during predefine (预定义时定义), we check the predefine type, not dynamic validation
+      if (!foundProperty.dataType) {
+        console.log('Property has no dataType defined in predefine, skipping');
+        return;
+      }
+      
+      const supportedTypes = ['string', 'int', 'float'];
+      if (!supportedTypes.includes(foundProperty.dataType)) {
+        console.log('Unsupported data type (from predefine):', foundProperty.dataType, '- only string/int/float are supported for cut/copy/paste');
+        return; // Skip unsupported types
+      }
+      
+      // Find the row
+      const row = allRowsForSelection.find(r => r.id === rowId);
+      if (!row) {
+        console.log('Row not found:', rowId);
+        return;
+      }
+      
+      // Get the cell value
+      let rawValue = row.propertyValues[propertyKey];
+      let value: string | number | null = null;
+      
+      // Convert to appropriate type based on property data type
+      if (rawValue !== null && rawValue !== undefined && rawValue !== '') {
+        if (foundProperty.dataType === 'int') {
+          const numValue = parseInt(String(rawValue), 10);
+          value = isNaN(numValue) ? null : numValue;
+        } else if (foundProperty.dataType === 'float') {
+          const numValue = parseFloat(String(rawValue));
+          value = isNaN(numValue) ? null : numValue;
+        } else if (foundProperty.dataType === 'string') {
+          value = String(rawValue);
+        }
+      }
+      
+      console.log('Cell value:', value);
+      
+      if (!cellsByRow.has(rowId)) {
+        cellsByRow.set(rowId, []);
+      }
+      cellsByRow.get(rowId)!.push({ propertyKey, rowId, value });
+      validCells.push(cellKey);
+    });
+
+    console.log('Valid cells found:', validCells.length);
+
+    if (validCells.length === 0) {
+      console.log('No valid cells to copy - no supported data types found');
+      // Still show feedback even if no valid cells
+      setToastMessage('No cells with supported types (string, int, float) selected');
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2000);
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Build 2D array (rows x columns) for clipboard
+    // Find the range of rows and columns
+    const rowIds = Array.from(cellsByRow.keys());
+    const propertyKeys = new Set<string>();
+    validCells.forEach(cellKey => {
+      // Find property key using the same method as above (match from end)
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          propertyKeys.add(property.key);
+          break;
+        }
+      }
+    });
+    
+    // Sort rows by their index in allRowsForSelection
+    rowIds.sort((a, b) => {
+      const indexA = allRowsForSelection.findIndex(r => r.id === a);
+      const indexB = allRowsForSelection.findIndex(r => r.id === b);
+      return indexA - indexB;
+    });
+    
+    // Sort properties by their index in orderedProperties
+    const sortedPropertyKeys = Array.from(propertyKeys).sort((a, b) => {
+      const indexA = orderedProperties.findIndex(p => p.key === a);
+      const indexB = orderedProperties.findIndex(p => p.key === b);
+      return indexA - indexB;
+    });
+    
+    // Build 2D array
+    const clipboardArray: Array<Array<string | number | null>> = [];
+    rowIds.forEach(rowId => {
+      const row = allRowsForSelection.find(r => r.id === rowId);
+      if (!row) return;
+      
+      const rowData: Array<string | number | null> = [];
+      sortedPropertyKeys.forEach(propertyKey => {
+        const cell = cellsByRow.get(rowId)?.find(c => c.propertyKey === propertyKey);
+        rowData.push(cell?.value ?? null);
+      });
+      clipboardArray.push(rowData);
+    });
+    
+    // Copy to clipboard (as tab-separated values for Excel-like behavior)
+    const clipboardText = clipboardArray
+      .map(row => row.map(cell => cell === null ? '' : String(cell)).join('\t'))
+      .join('\n');
+    
+    // Try to copy to system clipboard
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(clipboardText).catch(err => {
+        console.error('Failed to copy to clipboard:', err);
+      });
+    }
+    
+    // Store clipboard data and mark as copy operation (not cut)
+    setClipboardData(clipboardArray);
+    setIsCutOperation(false); // Important: mark as copy, not cut
+    
+    // Do NOT set cutCells or cutSelectionBounds for copy operation
+    // Copy operation should not show visual feedback (no dashed border)
+    
+    // Show toast message immediately
+    console.log('Setting toast message: Content copied');
+    setToastMessage('Content copied');
+    
+    // Close menu first
+    setBatchEditMenuVisible(false);
+    setBatchEditMenuPosition(null);
+    
+    // Auto-hide toast after 2 seconds
+    setTimeout(() => {
+      console.log('Clearing toast message');
+      setToastMessage(null);
+    }, 2000);
+  }, [selectedCells, getAllRowsForCellSelection, orderedProperties]);
+
+  // Handle Paste operation
+  const handlePaste = useCallback(async () => {
+    console.log('handlePaste called');
+    
+    // Check if there is clipboard data
+    if (!clipboardData || clipboardData.length === 0 || clipboardData[0].length === 0) {
+      console.log('No clipboard data to paste');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+    
+    // Check if there are selected cells
+    if (selectedCells.size === 0) {
+      console.log('No cells selected for paste');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      setToastMessage('Please select cells to paste');
+      setTimeout(() => setToastMessage(null), 2000);
+      return;
+    }
+    
+    const allRowsForSelection = getAllRowsForCellSelection();
+    
+    // Find the first selected cell as the paste starting point
+    const firstSelectedCell = Array.from(selectedCells)[0];
+    if (!firstSelectedCell) {
+      return;
+    }
+    
+    // Parse the first selected cell to get rowId and propertyKey
+    let startRowId = '';
+    let startPropertyKey = '';
+    let foundStartProperty = null;
+    
+    for (const property of orderedProperties) {
+      const propertyKeyWithDash = '-' + property.key;
+      if (firstSelectedCell.endsWith(propertyKeyWithDash)) {
+        startRowId = firstSelectedCell.substring(0, firstSelectedCell.length - propertyKeyWithDash.length);
+        startPropertyKey = property.key;
+        foundStartProperty = property;
+        break;
+      }
+    }
+    
+    if (!foundStartProperty || !startRowId) {
+      console.log('Could not parse first selected cell:', firstSelectedCell);
+      return;
+    }
+    
+    // Find the starting row index and property index
+    const startRowIndex = allRowsForSelection.findIndex(r => r.id === startRowId);
+    const startPropertyIndex = orderedProperties.findIndex(p => p.key === startPropertyKey);
+    
+    if (startRowIndex === -1 || startPropertyIndex === -1) {
+      console.log('Could not find starting row or property');
+      return;
+    }
+    
+    console.log('Paste starting position - rowIndex:', startRowIndex, 'propertyIndex:', startPropertyIndex);
+    console.log('Clipboard data dimensions:', clipboardData.length, 'rows x', clipboardData[0].length, 'columns');
+    
+    // Store updates to apply
+    const updatesToApply: Array<{ rowId: string; propertyKey: string; value: string | number | null }> = [];
+    // Map to store new rows data by target row index (relative to current rows)
+    const rowsToCreateByIndex = new Map<number, { name: string; propertyValues: Record<string, any> }>();
+    
+    // Calculate how many new rows we need to create
+    const maxTargetRowIndex = startRowIndex + clipboardData.length - 1;
+    const rowsNeeded = Math.max(0, maxTargetRowIndex - allRowsForSelection.length + 1);
+    
+    // Initialize new rows
+    for (let i = 0; i < rowsNeeded; i++) {
+      const targetRowIndex = allRowsForSelection.length + i;
+      rowsToCreateByIndex.set(targetRowIndex, { name: 'Untitled', propertyValues: {} });
+    }
+    
+    // Iterate through clipboard data and map to target cells
+    clipboardData.forEach((clipboardRow, clipboardRowIndex) => {
+      clipboardRow.forEach((cellValue, clipboardColIndex) => {
+        const targetRowIndex = startRowIndex + clipboardRowIndex;
+        const targetPropertyIndex = startPropertyIndex + clipboardColIndex;
+        
+        // Check if target property exists
+        if (targetPropertyIndex >= orderedProperties.length) {
+          console.log('Target property index out of range:', targetPropertyIndex);
+          return; // Skip if column is out of range
+        }
+        
+        const targetProperty = orderedProperties[targetPropertyIndex];
+        
+        // Check if data type is supported (string, int, float)
+        if (!targetProperty.dataType || !['string', 'int', 'float'].includes(targetProperty.dataType)) {
+          console.log('Unsupported data type for paste:', targetProperty.dataType);
+          return; // Skip unsupported types
+        }
+        
+        // Convert value to appropriate type
+        let convertedValue: string | number | null = null;
+        if (cellValue !== null && cellValue !== undefined && cellValue !== '') {
+          if (targetProperty.dataType === 'int') {
+            const numValue = parseInt(String(cellValue), 10);
+            convertedValue = isNaN(numValue) ? null : numValue;
+          } else if (targetProperty.dataType === 'float') {
+            const numValue = parseFloat(String(cellValue));
+            convertedValue = isNaN(numValue) ? null : numValue;
+          } else if (targetProperty.dataType === 'string') {
+            convertedValue = String(cellValue);
+          }
+        }
+        
+        // Check if target row exists, add to create map or update list
+        if (targetRowIndex >= allRowsForSelection.length) {
+          // Need to create new row - add value to the row data
+          const newRowData = rowsToCreateByIndex.get(targetRowIndex);
+          if (newRowData) {
+            newRowData.propertyValues[targetProperty.key] = convertedValue;
+          }
+        } else {
+          // Target row exists, prepare update
+          const targetRow = allRowsForSelection[targetRowIndex];
+          
+          updatesToApply.push({
+            rowId: targetRow.id,
+            propertyKey: targetProperty.key,
+            value: convertedValue,
+          });
+        }
+      });
+    });
+    
+    const rowsToCreate = Array.from(rowsToCreateByIndex.values());
+    console.log('Rows to create:', rowsToCreate.length);
+    console.log('Updates to apply:', updatesToApply.length);
+    
+    // Create new rows if needed (create them first before updating existing rows)
+    if (rowsToCreate.length > 0 && onSaveAsset && library) {
+      setIsSaving(true);
+      try {
+        // Create rows sequentially with optimistic updates
+        const createdTempIds: string[] = [];
+        for (let i = 0; i < rowsToCreate.length; i++) {
+          const rowData = rowsToCreate[i];
+          const assetName = rowData.name || 'Untitled';
+          
+          // Create optimistic asset row with temporary ID
+          const tempId = `temp-paste-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`;
+          createdTempIds.push(tempId);
+          
+          const optimisticAsset: AssetRow = {
+            id: tempId,
+            libraryId: library.id,
+            name: assetName,
+            propertyValues: { ...rowData.propertyValues },
+          };
+
+          // Optimistically add the asset to the display immediately
+          setOptimisticNewAssets(prev => {
+            const newMap = new Map(prev);
+            newMap.set(tempId, optimisticAsset);
+            return newMap;
+          });
+          
+          await onSaveAsset(assetName, rowData.propertyValues);
+        }
+        // Wait a bit for parent to refresh and match optimistic assets with real ones
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Clean up optimistic assets after parent refresh (they should be replaced by real assets)
+        setTimeout(() => {
+          createdTempIds.forEach(tempId => {
+            setOptimisticNewAssets(prev => {
+              if (prev.has(tempId)) {
+                const newMap = new Map(prev);
+                newMap.delete(tempId);
+                return newMap;
+              }
+              return prev;
+            });
+          });
+        }, 2000);
+      } catch (error) {
+        console.error('Failed to create rows for paste:', error);
+        setIsSaving(false);
+        setBatchEditMenuVisible(false);
+        setBatchEditMenuPosition(null);
+        setToastMessage('Failed to paste: could not create new rows');
+        setTimeout(() => setToastMessage(null), 2000);
+        return;
+      }
+      setIsSaving(false);
+    }
+    
+    // Apply updates to existing rows
+    if (updatesToApply.length > 0 && onUpdateAsset) {
+      setIsSaving(true);
+      try {
+        // Group updates by rowId for efficiency
+        const updatesByRow = new Map<string, Record<string, any>>();
+        
+        // Initialize updatesByRow with existing property values
+        updatesToApply.forEach(({ rowId, propertyKey, value }) => {
+          if (!updatesByRow.has(rowId)) {
+            const row = allRowsForSelection.find(r => r.id === rowId);
+            if (row) {
+              // Copy all existing property values (may include boolean and other types)
+              updatesByRow.set(rowId, { ...row.propertyValues });
+            } else {
+              updatesByRow.set(rowId, {});
+            }
+          }
+          // Update with new value
+          const rowUpdates = updatesByRow.get(rowId);
+          if (rowUpdates) {
+            rowUpdates[propertyKey] = value;
+          }
+        });
+        
+        // Apply updates
+        for (const [rowId, propertyValues] of updatesByRow.entries()) {
+          const row = allRowsForSelection.find(r => r.id === rowId);
+          if (row) {
+            const assetName = row.name || 'Untitled';
+            await onUpdateAsset(rowId, assetName, propertyValues);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to update rows for paste:', error);
+        setIsSaving(false);
+        setBatchEditMenuVisible(false);
+        setBatchEditMenuPosition(null);
+        setToastMessage('Failed to paste: could not update cells');
+        setTimeout(() => setToastMessage(null), 2000);
+        return;
+      }
+      setIsSaving(false);
+    }
+    
+    // If this was a cut operation, clear the cut cells
+    if (isCutOperation && cutCells.size > 0 && onUpdateAsset) {
+      console.log('Clearing cut cells after paste');
+      
+      // Clear cut state immediately (before clearing cell contents) to remove visual feedback
+      const cutCellsToClear = new Set(cutCells);
+      setCutCells(new Set());
+      setCutSelectionBounds(null);
+      setIsCutOperation(false);
+      
+      // Group cut cells by rowId
+      const cutCellsByRow = new Map<string, Record<string, any>>();
+      
+      cutCellsToClear.forEach((cellKey) => {
+        // Parse cellKey to get rowId and propertyKey
+        let rowId = '';
+        let propertyKey = '';
+        
+        for (const property of orderedProperties) {
+          const propertyKeyWithDash = '-' + property.key;
+          if (cellKey.endsWith(propertyKeyWithDash)) {
+            rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+            propertyKey = property.key;
+            break;
+          }
+        }
+        
+        if (rowId && propertyKey) {
+          const row = allRowsForSelection.find(r => r.id === rowId);
+          if (row) {
+            if (!cutCellsByRow.has(rowId)) {
+              // Copy all existing property values (may include boolean and other types)
+              cutCellsByRow.set(rowId, { ...row.propertyValues });
+            }
+            const rowUpdates = cutCellsByRow.get(rowId);
+            if (rowUpdates) {
+              rowUpdates[propertyKey] = null; // Clear the cell
+            }
+          }
+        }
+      });
+      
+      // Apply clearing updates (async, but cut state is already cleared)
+      setIsSaving(true);
+      try {
+        for (const [rowId, propertyValues] of cutCellsByRow.entries()) {
+          const row = allRowsForSelection.find(r => r.id === rowId);
+          if (row) {
+            const assetName = row.name || 'Untitled';
+            await onUpdateAsset(rowId, assetName, propertyValues);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to clear cut cells after paste:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    } else {
+      // If not a cut operation, still clear clipboard data
+      setClipboardData(null);
+      setIsCutOperation(false);
+    }
+    
+    // Clear selected cells (optional, you might want to keep selection)
+    // setSelectedCells(new Set());
+    
+    // Show toast message
+    setToastMessage('Content pasted');
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2000);
+    
+    // Close menu
+    setBatchEditMenuVisible(false);
+    setBatchEditMenuPosition(null);
+  }, [clipboardData, selectedCells, getAllRowsForCellSelection, orderedProperties, isCutOperation, cutCells, onSaveAsset, onUpdateAsset, library]);
+
+  // Handle Insert Row Above operation
+  const handleInsertRowAbove = useCallback(async () => {
+    console.log('handleInsertRowAbove called, selectedCells:', selectedCells);
+    
+    if (selectedCells.size === 0) {
+      console.log('No cells selected');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    if (!onSaveAsset || !library) {
+      console.log('onSaveAsset or library not available');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Extract unique row IDs from selected cells
+    const allRowsForSelection = getAllRowsForCellSelection();
+    const selectedRowIds = new Set<string>();
+    
+    selectedCells.forEach((cellKey) => {
+      // Parse cellKey to extract rowId
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          const rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+          selectedRowIds.add(rowId);
+          break;
+        }
+      }
+    });
+
+    if (selectedRowIds.size === 0) {
+      console.log('No valid rows found in selected cells');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Sort row IDs by their index in allRowsForSelection (from top to bottom)
+    const sortedRowIds = Array.from(selectedRowIds).sort((a, b) => {
+      const indexA = allRowsForSelection.findIndex(r => r.id === a);
+      const indexB = allRowsForSelection.findIndex(r => r.id === b);
+      return indexA - indexB;
+    });
+
+    console.log('Selected rows (sorted):', sortedRowIds.length, 'rows');
+    console.log('Row IDs:', sortedRowIds);
+
+    // Insert n rows above the first selected row (where n = number of selected rows)
+    // All n rows should be inserted consecutively above the first selected row
+    const numRowsToInsert = sortedRowIds.length;
+    const firstRowId = sortedRowIds[0]; // First selected row (topmost)
+    const firstRow = allRowsForSelection.find(r => r.id === firstRowId);
+    
+    if (!firstRow) {
+      console.log('First selected row not found');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (supabase) {
+        // Query the first selected row's created_at to calculate insertion position
+        const { data: targetRowData, error: queryError } = await supabase
+          .from('library_assets')
+          .select('created_at')
+          .eq('id', firstRowId)
+          .single();
+        
+        if (queryError) {
+          console.error('Failed to query target row created_at:', queryError);
+          setBatchEditMenuVisible(false);
+          setBatchEditMenuPosition(null);
+          setIsSaving(false);
+          setToastMessage('Failed to insert rows above');
+          setTimeout(() => setToastMessage(null), 2000);
+          return;
+        }
+        
+        const targetCreatedAt = new Date(targetRowData.created_at);
+        
+        // Insert n rows above the first selected row
+        // Each row should have created_at = targetCreatedAt - (n - i) * 1000ms
+        // So the first inserted row has the earliest time (appears at the top)
+        // And the last inserted row has the time just before the target row
+        const createdTempIds: string[] = [];
+        for (let i = 0; i < numRowsToInsert; i++) {
+          // Calculate created_at: each row is 1 second before the next
+          // First row (i=0): targetCreatedAt - (numRowsToInsert * 1000)ms
+          // Last row (i=numRowsToInsert-1): targetCreatedAt - (1 * 1000)ms
+          const offsetMs = (numRowsToInsert - i) * 1000;
+          const newCreatedAt = new Date(targetCreatedAt.getTime() - offsetMs);
+          
+          const assetName = 'Untitled'; // Required for database, but won't be displayed
+          
+          // Create optimistic asset row with temporary ID
+          const tempId = `temp-insert-above-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`;
+          createdTempIds.push(tempId);
+          
+          const optimisticAsset: AssetRow = {
+            id: tempId,
+            libraryId: library.id,
+            name: assetName,
+            propertyValues: {}, // Empty property values
+          };
+
+          // Optimistically add the asset to the display immediately
+          setOptimisticNewAssets(prev => {
+            const newMap = new Map(prev);
+            newMap.set(tempId, optimisticAsset);
+            return newMap;
+          });
+          
+          await onSaveAsset(assetName, {}, { createdAt: newCreatedAt });
+        }
+        
+        // Clean up optimistic assets after parent refreshes
+        setTimeout(() => {
+          createdTempIds.forEach(tempId => {
+            setOptimisticNewAssets(prev => {
+              if (prev.has(tempId)) {
+                const newMap = new Map(prev);
+                newMap.delete(tempId);
+                return newMap;
+              }
+              return prev;
+            });
+          });
+        }, 2000);
+      } else {
+        // Fallback if supabase is not available
+        const assetName = 'Untitled';
+        for (let i = 0; i < numRowsToInsert; i++) {
+          await onSaveAsset(assetName, {});
+        }
+      }
+      
+      // Wait a bit for rows to be created and parent to refresh
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Failed to insert rows above:', error);
+      setToastMessage('Failed to insert rows above');
+      setTimeout(() => setToastMessage(null), 2000);
+    } finally {
+      setIsSaving(false);
+    }
+
+    // Close menu
+    setBatchEditMenuVisible(false);
+    setBatchEditMenuPosition(null);
+  }, [selectedCells, getAllRowsForCellSelection, orderedProperties, onSaveAsset, library, supabase]);
+
+  // Handle Insert Row Below operation
+  const handleInsertRowBelow = useCallback(async () => {
+    console.log('handleInsertRowBelow called, selectedCells:', selectedCells);
+    
+    if (selectedCells.size === 0) {
+      console.log('No cells selected');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    if (!onSaveAsset || !library) {
+      console.log('onSaveAsset or library not available');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Extract unique row IDs from selected cells
+    const allRowsForSelection = getAllRowsForCellSelection();
+    const selectedRowIds = new Set<string>();
+    
+    selectedCells.forEach((cellKey) => {
+      // Parse cellKey to extract rowId
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          const rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+          selectedRowIds.add(rowId);
+          break;
+        }
+      }
+    });
+
+    if (selectedRowIds.size === 0) {
+      console.log('No valid rows found in selected cells');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    // Sort row IDs by their index in allRowsForSelection (from top to bottom)
+    const sortedRowIds = Array.from(selectedRowIds).sort((a, b) => {
+      const indexA = allRowsForSelection.findIndex(r => r.id === a);
+      const indexB = allRowsForSelection.findIndex(r => r.id === b);
+      return indexA - indexB;
+    });
+
+    console.log('Selected rows (sorted):', sortedRowIds.length, 'rows');
+    console.log('Row IDs:', sortedRowIds);
+
+    // Insert n rows below the last selected row (where n = number of selected rows)
+    // All n rows should be inserted consecutively below the last selected row
+    const numRowsToInsert = sortedRowIds.length;
+    const lastRowId = sortedRowIds[sortedRowIds.length - 1]; // Last selected row (bottommost)
+    const lastRow = allRowsForSelection.find(r => r.id === lastRowId);
+    
+    if (!lastRow) {
+      console.log('Last selected row not found');
+      setBatchEditMenuVisible(false);
+      setBatchEditMenuPosition(null);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (supabase) {
+        // Query the last selected row's created_at to calculate insertion position
+        const { data: targetRowData, error: queryError } = await supabase
+          .from('library_assets')
+          .select('created_at')
+          .eq('id', lastRowId)
+          .single();
+        
+        if (queryError) {
+          console.error('Failed to query target row created_at:', queryError);
+          setBatchEditMenuVisible(false);
+          setBatchEditMenuPosition(null);
+          setIsSaving(false);
+          setToastMessage('Failed to insert rows below');
+          setTimeout(() => setToastMessage(null), 2000);
+          return;
+        }
+        
+        const targetCreatedAt = new Date(targetRowData.created_at);
+        
+        // Insert n rows below the last selected row
+        // Each row should have created_at = targetCreatedAt + (i + 1) * 1000ms
+        // So the first inserted row has the time just after the target row
+        // And the last inserted row has the latest time (appears at the bottom)
+        const createdTempIds: string[] = [];
+        for (let i = 0; i < numRowsToInsert; i++) {
+          // Calculate created_at: each row is 1 second after the previous
+          // First row (i=0): targetCreatedAt + (1 * 1000)ms
+          // Last row (i=numRowsToInsert-1): targetCreatedAt + (numRowsToInsert * 1000)ms
+          const offsetMs = (i + 1) * 1000;
+          const newCreatedAt = new Date(targetCreatedAt.getTime() + offsetMs);
+          
+          const assetName = 'Untitled'; // Required for database, but won't be displayed
+          
+          // Create optimistic asset row with temporary ID
+          const tempId = `temp-insert-below-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`;
+          createdTempIds.push(tempId);
+          
+          const optimisticAsset: AssetRow = {
+            id: tempId,
+            libraryId: library.id,
+            name: assetName,
+            propertyValues: {}, // Empty property values
+          };
+
+          // Optimistically add the asset to the display immediately
+          setOptimisticNewAssets(prev => {
+            const newMap = new Map(prev);
+            newMap.set(tempId, optimisticAsset);
+            return newMap;
+          });
+          
+          await onSaveAsset(assetName, {}, { createdAt: newCreatedAt });
+        }
+        
+        // Clean up optimistic assets after parent refreshes
+        setTimeout(() => {
+          createdTempIds.forEach(tempId => {
+            setOptimisticNewAssets(prev => {
+              if (prev.has(tempId)) {
+                const newMap = new Map(prev);
+                newMap.delete(tempId);
+                return newMap;
+              }
+              return prev;
+            });
+          });
+        }, 2000);
+      } else {
+        // Fallback if supabase is not available
+        const assetName = 'Untitled';
+        for (let i = 0; i < numRowsToInsert; i++) {
+          await onSaveAsset(assetName, {});
+        }
+      }
+      
+      // Wait a bit for rows to be created and parent to refresh
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Failed to insert rows below:', error);
+      setToastMessage('Failed to insert rows below');
+      setTimeout(() => setToastMessage(null), 2000);
+    } finally {
+      setIsSaving(false);
+    }
+
+    // Close menu
+    setBatchEditMenuVisible(false);
+    setBatchEditMenuPosition(null);
+  }, [selectedCells, getAllRowsForCellSelection, orderedProperties, onSaveAsset, library, supabase]);
 
   // Handle delete asset with optimistic update
   const handleDeleteAsset = async () => {
@@ -1107,44 +2635,6 @@ export function LibraryAssetsTable({
     );
   }
 
-  const grouped = (() => {
-    const byId = new Map<string, SectionConfig>();
-    sections.forEach((s) => byId.set(s.id, s));
-
-    const groupMap = new Map<
-      string,
-      {
-        section: SectionConfig;
-        properties: PropertyConfig[];
-      }
-    >();
-
-    for (const prop of properties) {
-      const section = byId.get(prop.sectionId);
-      if (!section) continue;
-
-      let group = groupMap.get(section.id);
-      if (!group) {
-        group = { section, properties: [] };
-        groupMap.set(section.id, group);
-      }
-      group.properties.push(prop);
-    }
-
-    const groups = Array.from(groupMap.values()).sort(
-      (a, b) => a.section.orderIndex - b.section.orderIndex
-    );
-
-    groups.forEach((g) => {
-      g.properties.sort((a, b) => a.orderIndex - b.orderIndex);
-    });
-
-    const orderedProperties = groups.flatMap((g) => g.properties);
-
-    return { groups, orderedProperties };
-  })();
-
-  const { groups, orderedProperties } = grouped;
 
   // Calculate total columns: # + properties (no actions column)
   const totalColumns = 1 + orderedProperties.length;
@@ -1196,17 +2686,26 @@ export function LibraryAssetsTable({
         <tbody className={styles.body}>
           {(() => {
             // Combine real rows with optimistic new assets and apply optimistic edit updates
+            // Only use optimistic updates if the name matches the row name
+            // If names don't match, it means the row was updated externally, so ignore the optimistic update
             const allRows: AssetRow[] = rows
               .filter((row): row is AssetRow => !deletedAssetIds.has(row.id))
               .map((row): AssetRow => {
                 const assetRow = row as AssetRow;
                 const optimisticUpdate = optimisticEditUpdates.get(assetRow.id);
-                if (optimisticUpdate) {
+                // Only use optimistic update if the row name matches the optimistic name
+                // This means the optimistic update was made in this table, not externally
+                // If names don't match, it means the row was updated externally, so use the row data
+                if (optimisticUpdate && optimisticUpdate.name === assetRow.name) {
+                  // Optimistic update matches current row, so it's safe to use
                   return {
                     ...assetRow,
                     name: optimisticUpdate.name,
                     propertyValues: { ...assetRow.propertyValues, ...optimisticUpdate.propertyValues }
                   };
+                } else if (optimisticUpdate && optimisticUpdate.name !== assetRow.name) {
+                  // Optimistic update doesn't match row - this means external update happened
+                  // Don't use the optimistic update, use the row data instead
                 }
                 return assetRow;
               });
@@ -1226,6 +2725,8 @@ export function LibraryAssetsTable({
                 <tr
                   key={row.id}
                   className={styles.editRow}
+                  onMouseEnter={() => setHoveredRowId(row.id)}
+                  onMouseLeave={() => setHoveredRowId(null)}
                 >
                   <td className={styles.numberCell}>{index + 1}</td>
                   {orderedProperties.map((property) => {
@@ -1360,13 +2861,50 @@ export function LibraryAssetsTable({
             }
             
             // Normal display row
+            const isRowHovered = hoveredRowId === row.id;
+            const isRowSelected = selectedRowIds.has(row.id);
+            
+            // Get actual row index in allRowsForSelection for border calculation
+            const allRowsForSelection = getAllRowsForCellSelection();
+            const actualRowIndex = allRowsForSelection.findIndex(r => r.id === row.id);
+            
             return (
               <tr
                 key={row.id}
-                className={styles.row}
-                onContextMenu={(e) => handleRowContextMenu(e, row)}
+                data-row-id={row.id}
+                className={`${styles.row} ${isRowSelected ? styles.rowSelected : ''}`}
+                onContextMenu={(e) => {
+                  // If there are selected cells, show batch edit menu
+                  if (selectedCells.size > 0) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setBatchEditMenuVisible(true);
+                    setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
+                  } else {
+                    handleRowContextMenu(e, row);
+                  }
+                }}
+                onMouseEnter={() => setHoveredRowId(row.id)}
+                onMouseLeave={() => setHoveredRowId(null)}
               >
-                <td className={styles.numberCell}>{index + 1}</td>
+                <td className={styles.numberCell}>
+                  {isRowHovered || isRowSelected ? (
+                    <div className={styles.checkboxContainer}>
+                      <Checkbox
+                        checked={isRowSelected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleRowSelectionToggle(row.id, e);
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <span>{index + 1}</span>
+                  )}
+                </td>
                 {orderedProperties.map((property, propertyIndex) => {
                   // Check if this is the first property (name field)
                   const isNameField = propertyIndex === 0;
@@ -1376,11 +2914,36 @@ export function LibraryAssetsTable({
                     const value = row.propertyValues[property.key];
                     const assetId = value ? String(value) : null;
                     
+                      const cellKey: CellKey = `${row.id}-${property.key}`;
+                      const isCellSelected = selectedCells.has(cellKey);
+                      const isCellCut = cutCells.has(cellKey);
+                      const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                      
+                      // Check if cell is on border of cut selection (only show outer border)
+                      let cutBorderClass = '';
+                      if (isCellCut && cutSelectionBounds && actualRowIndex !== -1) {
+                        const { minRowIndex, maxRowIndex, minPropertyIndex, maxPropertyIndex } = cutSelectionBounds;
+                        const isTop = actualRowIndex === minRowIndex;
+                        const isBottom = actualRowIndex === maxRowIndex;
+                        const isLeft = propertyIndex === minPropertyIndex;
+                        const isRight = propertyIndex === maxPropertyIndex;
+                        
+                        const borderClasses: string[] = [];
+                        if (isTop) borderClasses.push(styles.cutBorderTop);
+                        if (isBottom) borderClasses.push(styles.cutBorderBottom);
+                        if (isLeft) borderClasses.push(styles.cutBorderLeft);
+                        if (isRight) borderClasses.push(styles.cutBorderRight);
+                        cutBorderClass = borderClasses.join(' ');
+                      }
+                      
                       return (
                         <td
                           key={property.id}
-                          className={styles.cell}
+                          data-property-key={property.key}
+                          className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
                           onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                          onClick={(e) => handleCellClick(row.id, property.key, e)}
+                          onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                         >
                           <ReferenceField
                             property={property}
@@ -1391,6 +2954,21 @@ export function LibraryAssetsTable({
                             onAvatarMouseLeave={handleAvatarMouseLeave}
                             onOpenReferenceModal={handleOpenReferenceModal}
                           />
+                          {showExpandIcon && (
+                            <div
+                              className={styles.cellExpandIcon}
+                              onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                              title="拖拽扩展选择"
+                            >
+                              <Image
+                                src={batchEditAddIcon}
+                                alt="扩展选择"
+                                width={18}
+                                height={18}
+                                style={{ pointerEvents: 'none' }}
+                              />
+                            </div>
+                          )}
                         </td>
                       );
                   }
@@ -1414,11 +2992,36 @@ export function LibraryAssetsTable({
                       }
                     }
                     
+                    const cellKey: CellKey = `${row.id}-${property.key}`;
+                    const isCellSelected = selectedCells.has(cellKey);
+                    const isCellCut = cutCells.has(cellKey);
+                    const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                    
+                    // Check if cell is on border of cut selection (only show outer border)
+                    let cutBorderClass = '';
+                    if (isCellCut && cutSelectionBounds && actualRowIndex !== -1) {
+                      const { minRowIndex, maxRowIndex, minPropertyIndex, maxPropertyIndex } = cutSelectionBounds;
+                      const isTop = actualRowIndex === minRowIndex;
+                      const isBottom = actualRowIndex === maxRowIndex;
+                      const isLeft = propertyIndex === minPropertyIndex;
+                      const isRight = propertyIndex === maxPropertyIndex;
+                      
+                      const borderClasses: string[] = [];
+                      if (isTop) borderClasses.push(styles.cutBorderTop);
+                      if (isBottom) borderClasses.push(styles.cutBorderBottom);
+                      if (isLeft) borderClasses.push(styles.cutBorderLeft);
+                      if (isRight) borderClasses.push(styles.cutBorderRight);
+                      cutBorderClass = borderClasses.join(' ');
+                    }
+                    
                     return (
                       <td
                         key={property.id}
-                        className={styles.cell}
+                        data-property-key={property.key}
+                        className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                        onClick={(e) => handleCellClick(row.id, property.key, e)}
+                        onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                       >
                         {mediaValue ? (
                           <div className={styles.mediaCellContent}>
@@ -1453,7 +3056,23 @@ export function LibraryAssetsTable({
                             </span>
                           </div>
                         ) : (
-                          <span className={styles.placeholderValue}>—</span>
+                          // Show blank instead of dash for empty media fields
+                          <span></span>
+                        )}
+                        {showExpandIcon && (
+                          <div
+                            className={styles.cellExpandIcon}
+                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                            title="拖拽扩展选择"
+                          >
+                            <Image
+                              src={batchEditAddIcon}
+                              alt="扩展选择"
+                              width={18}
+                              height={18}
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          </div>
                         )}
                       </td>
                     );
@@ -1471,11 +3090,36 @@ export function LibraryAssetsTable({
                     
                     const checked = value === true || value === 'true' || String(value).toLowerCase() === 'true';
                     
+                    const cellKey: CellKey = `${row.id}-${property.key}`;
+                    const isCellSelected = selectedCells.has(cellKey);
+                    const isCellCut = cutCells.has(cellKey);
+                    const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                    
+                    // Check if cell is on border of cut selection (only show outer border)
+                    let cutBorderClass = '';
+                    if (isCellCut && cutSelectionBounds && actualRowIndex !== -1) {
+                      const { minRowIndex, maxRowIndex, minPropertyIndex, maxPropertyIndex } = cutSelectionBounds;
+                      const isTop = actualRowIndex === minRowIndex;
+                      const isBottom = actualRowIndex === maxRowIndex;
+                      const isLeft = propertyIndex === minPropertyIndex;
+                      const isRight = propertyIndex === maxPropertyIndex;
+                      
+                      const borderClasses: string[] = [];
+                      if (isTop) borderClasses.push(styles.cutBorderTop);
+                      if (isBottom) borderClasses.push(styles.cutBorderBottom);
+                      if (isLeft) borderClasses.push(styles.cutBorderLeft);
+                      if (isRight) borderClasses.push(styles.cutBorderRight);
+                      cutBorderClass = borderClasses.join(' ');
+                    }
+                    
                     return (
                       <td
                         key={property.id}
-                        className={styles.cell}
+                        data-property-key={property.key}
+                        className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                        onClick={(e) => handleCellClick(row.id, property.key, e)}
+                        onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                       >
                         <div className={styles.booleanToggle}>
                           <Switch
@@ -1519,6 +3163,21 @@ export function LibraryAssetsTable({
                             {checked ? 'True' : 'False'}
                           </span>
                         </div>
+                        {showExpandIcon && (
+                          <div
+                            className={styles.cellExpandIcon}
+                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                            title="拖拽扩展选择"
+                          >
+                            <Image
+                              src={batchEditAddIcon}
+                              alt="扩展选择"
+                              width={18}
+                              height={18}
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          </div>
+                        )}
                       </td>
                     );
                   }
@@ -1536,11 +3195,36 @@ export function LibraryAssetsTable({
                     const display = value !== null && value !== undefined && value !== '' ? String(value) : null;
                     const isOpen = openEnumSelects[enumSelectKey] || false;
                     
+                    const cellKey: CellKey = `${row.id}-${property.key}`;
+                    const isCellSelected = selectedCells.has(cellKey);
+                    const isCellCut = cutCells.has(cellKey);
+                    const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                    
+                    // Check if cell is on border of cut selection (only show outer border)
+                    let cutBorderClass = '';
+                    if (isCellCut && cutSelectionBounds && actualRowIndex !== -1) {
+                      const { minRowIndex, maxRowIndex, minPropertyIndex, maxPropertyIndex } = cutSelectionBounds;
+                      const isTop = actualRowIndex === minRowIndex;
+                      const isBottom = actualRowIndex === maxRowIndex;
+                      const isLeft = propertyIndex === minPropertyIndex;
+                      const isRight = propertyIndex === maxPropertyIndex;
+                      
+                      const borderClasses: string[] = [];
+                      if (isTop) borderClasses.push(styles.cutBorderTop);
+                      if (isBottom) borderClasses.push(styles.cutBorderBottom);
+                      if (isLeft) borderClasses.push(styles.cutBorderLeft);
+                      if (isRight) borderClasses.push(styles.cutBorderRight);
+                      cutBorderClass = borderClasses.join(' ');
+                    }
+                    
                     return (
                       <td
                         key={property.id}
-                        className={styles.cell}
+                        data-property-key={property.key}
+                        className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                        onClick={(e) => handleCellClick(row.id, property.key, e)}
+                        onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                       >
                         <div className={styles.enumSelectWrapper}>
                           <Select
@@ -1619,29 +3303,81 @@ export function LibraryAssetsTable({
                             }}
                           />
                         </div>
+                        {showExpandIcon && (
+                          <div
+                            className={styles.cellExpandIcon}
+                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                            title="拖拽扩展选择"
+                          >
+                            <Image
+                              src={batchEditAddIcon}
+                              alt="扩展选择"
+                              width={18}
+                              height={18}
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          </div>
+                        )}
                       </td>
                     );
                   }
                   
                   // Other fields: show text only
-                  const value = row.propertyValues[property.key];
+                  // For name field, fallback to row.name if propertyValues doesn't have it
+                  // But don't display "Untitled" for blank rows - show empty instead
+                  let value = row.propertyValues[property.key];
+                  if (isNameField && (value === null || value === undefined || value === '')) {
+                    // Only use row.name as fallback if it's not 'Untitled' (for blank rows)
+                    // This ensures new blank rows don't show "Untitled"
+                    if (row.name && row.name !== 'Untitled') {
+                      value = row.name;
+                    } else {
+                      value = null; // Show blank for new rows with default "Untitled" name
+                    }
+                  }
                   let display: string | null = null;
                   
                   if (value !== null && value !== undefined && value !== '') {
                     display = String(value);
                   }
 
+                  const cellKey: CellKey = `${row.id}-${property.key}`;
+                  const isCellSelected = selectedCells.has(cellKey);
+                  const isCellCut = cutCells.has(cellKey);
+                  // Only show expand icon when exactly one cell is selected and this cell is selected
+                  const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                  
+                  // Check if cell is on border of cut selection (only show outer border)
+                  let cutBorderClass = '';
+                  if (isCellCut && cutSelectionBounds && actualRowIndex !== -1) {
+                    const { minRowIndex, maxRowIndex, minPropertyIndex, maxPropertyIndex } = cutSelectionBounds;
+                    const isTop = actualRowIndex === minRowIndex;
+                    const isBottom = actualRowIndex === maxRowIndex;
+                    const isLeft = propertyIndex === minPropertyIndex;
+                    const isRight = propertyIndex === maxPropertyIndex;
+                    
+                    const borderClasses: string[] = [];
+                    if (isTop) borderClasses.push(styles.cutBorderTop);
+                    if (isBottom) borderClasses.push(styles.cutBorderBottom);
+                    if (isLeft) borderClasses.push(styles.cutBorderLeft);
+                    if (isRight) borderClasses.push(styles.cutBorderRight);
+                    cutBorderClass = borderClasses.join(' ');
+                  }
+                  
                   return (
                     <td
                       key={property.id}
-                      className={styles.cell}
+                      data-property-key={property.key}
+                      className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
                       onDoubleClick={(e) => handleCellDoubleClick(row, e)}
+                      onClick={(e) => handleCellClick(row.id, property.key, e)}
+                      onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                     >
                       {isNameField ? (
                         // Name field: show text + view detail button
                         <div className={styles.cellContent}>
                           <span className={styles.cellText}>
-                            {display ? display : <span className={styles.placeholderValue}>—</span>}
+                            {display || ''}
                           </span>
                           <button
                             className={styles.viewDetailButton}
@@ -1665,9 +3401,25 @@ export function LibraryAssetsTable({
                         </div>
                       ) : (
                         // Other fields: show text with ellipsis for long content
-                        <span className={styles.cellText}>
-                          {display ? display : <span className={styles.placeholderValue}>—</span>}
+                        // Show blank (empty string) instead of placeholder dash for empty values
+                        <span className={styles.cellText} title={display || ''}>
+                          {display || ''}
                         </span>
+                      )}
+                      {showExpandIcon && (
+                        <div
+                          className={styles.cellExpandIcon}
+                          onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                          title="拖拽扩展选择"
+                        >
+                          <Image
+                            src={batchEditAddIcon}
+                            alt="扩展选择"
+                            width={18}
+                            height={18}
+                            style={{ pointerEvents: 'none' }}
+                          />
+                        </div>
                       )}
                     </td>
                   );
@@ -2006,6 +3758,188 @@ export function LibraryAssetsTable({
         >
           Delete
         </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Batch Edit Context Menu */}
+    {batchEditMenuVisible && batchEditMenuPosition && (typeof document !== 'undefined') && createPortal(
+      <div
+        className="batchEditMenu"
+        style={{
+          position: 'fixed',
+          left: `${batchEditMenuPosition.x}px`,
+          top: `${batchEditMenuPosition.y}px`,
+          zIndex: 1000,
+          backgroundColor: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '8px',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+          padding: '8px 0',
+          minWidth: '180px',
+          overflow: 'hidden',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Title: ACTIONS */}
+        <div className={styles.batchEditMenuTitle}>ACTIONS</div>
+        
+        {/* Cut */}
+        <div
+          className={styles.batchEditMenuItem}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#fff1f0';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Cut button clicked, selectedCells:', Array.from(selectedCells));
+            console.log('Calling handleCut function');
+            try {
+              handleCut();
+            } catch (error) {
+              console.error('Error in handleCut:', error);
+            }
+          }}
+        >
+          <span className={styles.batchEditMenuText}>Cut</span>
+        </div>
+        
+        {/* Copy */}
+        <div
+          className={styles.batchEditMenuItem}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#fff1f0';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+          onClick={() => {
+            handleCopy();
+          }}
+        >
+          <span className={styles.batchEditMenuText}>Copy</span>
+        </div>
+        
+        {/* Paste */}
+        <div
+          className={styles.batchEditMenuItem}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#fff1f0';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+          onClick={() => {
+            handlePaste();
+          }}
+        >
+          <span className={styles.batchEditMenuText}>Paste</span>
+        </div>
+        
+        <div className={styles.batchEditMenuDivider}></div>
+        
+        {/* Insert row above */}
+        <div
+          className={styles.batchEditMenuItem}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#f3f4f6';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+          onClick={() => {
+            handleInsertRowAbove();
+          }}
+        >
+          <span className={styles.batchEditMenuText}>Insert row above</span>
+        </div>
+        
+        {/* Insert row below */}
+        <div
+          className={styles.batchEditMenuItem}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#f3f4f6';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+          onClick={() => {
+            handleInsertRowBelow();
+          }}
+        >
+          <span className={styles.batchEditMenuText}>Insert row below</span>
+        </div>
+        
+        {/* Clear contents */}
+        <div
+          className={styles.batchEditMenuItem}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#f3f4f6';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+          onClick={() => {
+            // TODO: Implement clear contents functionality
+            console.log('Clear contents');
+            setBatchEditMenuVisible(false);
+            setBatchEditMenuPosition(null);
+          }}
+        >
+          <span className={styles.batchEditMenuText}>Clear contents</span>
+        </div>
+        
+        <div className={styles.batchEditMenuDivider}></div>
+        
+        {/* Delete row */}
+        <div
+          className={styles.batchEditMenuItem}
+          style={{ color: '#ff4d4f' }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#fff1f0';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+          onClick={() => {
+            // TODO: Implement delete row functionality
+            console.log('Delete row');
+            setBatchEditMenuVisible(false);
+            setBatchEditMenuPosition(null);
+          }}
+        >
+          <span className={styles.batchEditMenuText} style={{ color: '#ff4d4f' }}>Delete row</span>
+        </div>
+      </div>,
+      document.body
+    )}
+
+    {/* Toast Message */}
+    {toastMessage && (typeof document !== 'undefined') && createPortal(
+      <div
+        className={styles.toastMessage}
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 10000,
+          backgroundColor: '#111827',
+          color: '#ffffff',
+          padding: '12px 24px',
+          borderRadius: '8px',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+          fontSize: '14px',
+          fontWeight: 500,
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+        }}
+      >
+        {toastMessage}
       </div>,
       document.body
     )}
