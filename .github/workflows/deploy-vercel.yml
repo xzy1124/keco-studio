@@ -207,7 +207,7 @@ jobs:
           else
             # Preview 部署（release 分支和 PR 等）
             echo "🚀 部署到 Preview 环境..."
-            vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} --env=${{ steps.env.outputs.environment }}
+            vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
           fi
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
