@@ -2396,6 +2396,13 @@ export function LibraryAssetsTable({
       
       // Wait a bit for rows to be created and parent to refresh
       await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Show success toast message
+      const rowCount = numRowsToInsert;
+      setToastMessage(rowCount === 1 ? '1 row inserted' : `${rowCount} rows inserted`);
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2000);
     } catch (error) {
       console.error('Failed to insert rows above:', error);
       setToastMessage('Failed to insert rows above');
@@ -2553,6 +2560,13 @@ export function LibraryAssetsTable({
       
       // Wait a bit for rows to be created and parent to refresh
       await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Show success toast message
+      const rowCount = numRowsToInsert;
+      setToastMessage(rowCount === 1 ? '1 row inserted' : `${rowCount} rows inserted`);
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2000);
     } catch (error) {
       console.error('Failed to insert rows below:', error);
       setToastMessage('Failed to insert rows below');
@@ -2585,18 +2599,22 @@ export function LibraryAssetsTable({
     const allRowsForSelection = getAllRowsForCellSelection();
     
     // Group selected cells by rowId for efficient updates
-    const cellsByRow = new Map<string, Record<string, any>>();
+    // Format: { rowId: { propertyValues: {...}, assetName: string | null } }
+    const cellsByRow = new Map<string, { propertyValues: Record<string, any>; assetName: string | null }>();
     
     selectedCells.forEach((cellKey) => {
       // Parse cellKey to extract rowId and propertyKey
       let rowId = '';
       let propertyKey = '';
+      let propertyIndex = -1;
       
-      for (const property of orderedProperties) {
+      for (let i = 0; i < orderedProperties.length; i++) {
+        const property = orderedProperties[i];
         const propertyKeyWithDash = '-' + property.key;
         if (cellKey.endsWith(propertyKeyWithDash)) {
           rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
           propertyKey = property.key;
+          propertyIndex = i;
           break;
         }
       }
@@ -2606,12 +2624,22 @@ export function LibraryAssetsTable({
         if (row) {
           // Initialize row updates if not exists
           if (!cellsByRow.has(rowId)) {
-            cellsByRow.set(rowId, { ...row.propertyValues });
+            cellsByRow.set(rowId, { 
+              propertyValues: { ...row.propertyValues },
+              assetName: row.name || null
+            });
           }
-          const rowUpdates = cellsByRow.get(rowId);
-          if (rowUpdates) {
-            // Set property value to null to clear it
-            rowUpdates[propertyKey] = null;
+          const rowData = cellsByRow.get(rowId);
+          if (rowData) {
+            // Check if this is the name field (first property, index 0)
+            const isNameField = propertyIndex === 0;
+            if (isNameField) {
+              // Clear the name field by setting assetName to empty string
+              rowData.assetName = '';
+            } else {
+              // Set property value to null to clear it
+              rowData.propertyValues[propertyKey] = null;
+            }
           }
         }
       }
@@ -2625,11 +2653,12 @@ export function LibraryAssetsTable({
     // Apply updates to clear cell contents
     setIsSaving(true);
     try {
-      for (const [rowId, propertyValues] of cellsByRow.entries()) {
+      for (const [rowId, rowData] of cellsByRow.entries()) {
         const row = allRowsForSelection.find(r => r.id === rowId);
         if (row) {
-          const assetName = row.name || 'Untitled';
-          await onUpdateAsset(rowId, assetName, propertyValues);
+          // Use the updated assetName if name field was cleared, otherwise use original name
+          const assetName = rowData.assetName !== null ? rowData.assetName : (row.name || 'Untitled');
+          await onUpdateAsset(rowId, assetName, rowData.propertyValues);
         }
       }
       

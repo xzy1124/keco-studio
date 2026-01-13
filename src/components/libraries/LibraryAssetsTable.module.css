@@ -334,6 +334,7 @@ td.cellCut.cutBorderRight:hover {
 }
 
 .row:hover {
+  background-color: rgba(151, 71, 255, 0.09) !important;
   background: #f9fafb;
 }
 
@@ -380,7 +381,7 @@ td.cellCut.cutBorderRight:hover {
 
 /* Row selected state */
 .rowSelected {
-  background: rgba(151, 71, 255, 0.06) !important;
+  background-color: rgba(151, 71, 255, 0.09) !important;
 }
 
 .rowSelected .numberCell {
