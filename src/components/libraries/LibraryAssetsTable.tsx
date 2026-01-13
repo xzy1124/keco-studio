@@ -102,6 +102,9 @@ export function LibraryAssetsTable({
   // Clear contents confirmation modal state
   const [clearContentsConfirmVisible, setClearContentsConfirmVisible] = useState(false);
   
+  // Delete row confirmation modal state
+  const [deleteRowConfirmVisible, setDeleteRowConfirmVisible] = useState(false);
+  
   // Optimistic update: track deleted asset IDs to hide them immediately
   const [deletedAssetIds, setDeletedAssetIds] = useState<Set<string>>(new Set());
   
@@ -2608,6 +2611,9 @@ export function LibraryAssetsTable({
     
     console.log('Clearing contents for', cellsByRow.size, 'rows');
     
+    // Close modal immediately before starting clearing (better UX)
+    setClearContentsConfirmVisible(false);
+    
     // Apply updates to clear cell contents
     setIsSaving(true);
     try {
@@ -2635,9 +2641,101 @@ export function LibraryAssetsTable({
       }, 2000);
     } finally {
       setIsSaving(false);
-      setClearContentsConfirmVisible(false);
     }
   }, [selectedCells, getAllRowsForCellSelection, orderedProperties, onUpdateAsset]);
+
+  // Handle Delete Row operation
+  const handleDeleteRow = useCallback(async () => {
+    console.log('handleDeleteRow called, selectedCells:', selectedCells);
+    
+    if (selectedCells.size === 0) {
+      console.log('No cells selected');
+      setDeleteRowConfirmVisible(false);
+      return;
+    }
+
+    if (!onDeleteAsset) {
+      console.log('onDeleteAsset not available');
+      setDeleteRowConfirmVisible(false);
+      return;
+    }
+
+    const allRowsForSelection = getAllRowsForCellSelection();
+    
+    // Extract unique row IDs from selected cells
+    const selectedRowIds = new Set<string>();
+    
+    selectedCells.forEach((cellKey) => {
+      // Parse cellKey to extract rowId
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          const rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+          selectedRowIds.add(rowId);
+          break;
+        }
+      }
+    });
+
+    if (selectedRowIds.size === 0) {
+      console.log('No valid rows found in selected cells');
+      setDeleteRowConfirmVisible(false);
+      return;
+    }
+
+    console.log('Deleting', selectedRowIds.size, 'rows:', Array.from(selectedRowIds));
+
+    // Close modal immediately before starting deletion (better UX)
+    setDeleteRowConfirmVisible(false);
+
+    // Delete rows sequentially
+    try {
+      for (const rowId of selectedRowIds) {
+        // Optimistic update: immediately hide the row
+        setDeletedAssetIds(prev => new Set(prev).add(rowId));
+        
+        // Delete the asset
+        await onDeleteAsset(rowId);
+      }
+      
+      // Clear selected cells after deletion
+      setSelectedCells(new Set());
+      
+      // Show success toast
+      const rowCount = selectedRowIds.size;
+      setToastMessage(rowCount === 1 ? 'Row deleted' : `${rowCount} rows deleted`);
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2000);
+      
+      // Remove from deleted set after a short delay to ensure parent refresh
+      setTimeout(() => {
+        selectedRowIds.forEach(rowId => {
+          setDeletedAssetIds(prev => {
+            const next = new Set(prev);
+            next.delete(rowId);
+            return next;
+          });
+        });
+      }, 100);
+    } catch (error) {
+      console.error('Failed to delete rows:', error);
+      
+      // Revert optimistic update on error
+      selectedRowIds.forEach(rowId => {
+        setDeletedAssetIds(prev => {
+          const next = new Set(prev);
+          next.delete(rowId);
+          return next;
+        });
+      });
+      
+      setToastMessage('Failed to delete rows');
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2000);
+    }
+  }, [selectedCells, getAllRowsForCellSelection, orderedProperties, onDeleteAsset]);
 
   // Handle delete asset with optimistic update
   const handleDeleteAsset = async () => {
@@ -3993,10 +4091,10 @@ export function LibraryAssetsTable({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
           onClick={() => {
-            // TODO: Implement delete row functionality
-            console.log('Delete row');
+            // Show confirmation modal
             setBatchEditMenuVisible(false);
             setBatchEditMenuPosition(null);
+            setDeleteRowConfirmVisible(true);
           }}
         >
           <span className={styles.batchEditMenuText} style={{ color: '#ff4d4f' }}>Delete row</span>
@@ -4058,9 +4156,31 @@ export function LibraryAssetsTable({
       okText="Delete"
       cancelText="Cancel"
       okButtonProps={{ danger: true }}
-      width={400}
+      width={616}
+      centered
+      className={styles.confirmModal}
+      wrapClassName={styles.confirmModalWrap}
     >
       <p>Are you sure you want to clear these content?</p>
+    </Modal>
+
+    {/* Delete Row Confirmation Modal */}
+    <Modal
+      open={deleteRowConfirmVisible}
+      title="Delete row"
+      onOk={handleDeleteRow}
+      onCancel={() => {
+        setDeleteRowConfirmVisible(false);
+      }}
+      okText="Delete"
+      cancelText="Cancel"
+      okButtonProps={{ danger: true }}
+      width={616}
+      centered
+      className={styles.confirmModal}
+      wrapClassName={styles.confirmModalWrap}
+    >
+      <p>Are you sure you want to delete these row?</p>
     </Modal>
     </>
   );
