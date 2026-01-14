@@ -141,21 +141,41 @@
   border-left: 2px solid rgba(135, 38, 238, 1) !important;
 }
 
-/* Multiple cells selected: border + background color */
+/* Multiple cells selected: border + background color - only show outer border */
 .cellMultipleSelected {
   background-color: rgba(135, 38, 238, 0.1) !important;
-  border: 2px solid rgba(135, 38, 238, 1) !important;
   position: relative;
   z-index: 1;
+  /* Remove default cell borders - only show border where selectionBorder classes are applied */
+  border-top: none !important;
+  border-bottom: none !important;
+  border-left: none !important;
+  border-right: none !important;
 }
 
 .cellMultipleSelected:hover {
   background-color: rgba(135, 38, 238, 0.12) !important;
 }
 
-/* Ensure multiple selected cells have proper border during drag */
-.cellMultipleSelected:not(:first-child) {
+/* Outer border styles - only show on boundary cells (solid line, similar to cut but solid) */
+.cellMultipleSelected.selectionBorderTop,
+td.cellMultipleSelected.selectionBorderTop {
+  border-top: 2px solid rgba(135, 38, 238, 1) !important;
+}
+
+.cellMultipleSelected.selectionBorderBottom,
+td.cellMultipleSelected.selectionBorderBottom {
+  border-bottom: 2px solid rgba(135, 38, 238, 1) !important;
+}
+
+.cellMultipleSelected.selectionBorderLeft,
+td.cellMultipleSelected.selectionBorderLeft {
   border-left: 2px solid rgba(135, 38, 238, 1) !important;
+}
+
+.cellMultipleSelected.selectionBorderRight,
+td.cellMultipleSelected.selectionBorderRight {
+  border-right: 2px solid rgba(135, 38, 238, 1) !important;
 }
 
 /* Multiple selected cells should have background even when row is hovered */

@@ -95,6 +95,14 @@ export function LibraryAssetsTable({
     propertyKeys: string[];
   } | null>(null);
   
+  // Store selection bounds for multiple cell selection border rendering
+  const [selectionBounds, setSelectionBounds] = useState<{
+    minRowIndex: number;
+    maxRowIndex: number;
+    minPropertyIndex: number;
+    maxPropertyIndex: number;
+  } | null>(null);
+  
   // Toast message state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -1550,6 +1558,85 @@ export function LibraryAssetsTable({
     
     return classes.join(' ');
   }, [cutSelectionBounds, cutCells, orderedProperties, getAllRowsForCellSelection]);
+
+  // Helper function to check if a cell is on the border of selection
+  const getSelectionBorderClasses = useCallback((rowId: string, propertyIndex: number): string => {
+    if (!selectionBounds || selectedCells.size <= 1) {
+      return '';
+    }
+    
+    const allRowsForSelection = getAllRowsForCellSelection();
+    const rowIndex = allRowsForSelection.findIndex(r => r.id === rowId);
+    
+    if (rowIndex === -1) return '';
+    
+    const cellKey = `${rowId}-${orderedProperties[propertyIndex].key}` as CellKey;
+    if (!selectedCells.has(cellKey)) {
+      return '';
+    }
+    
+    const { minRowIndex, maxRowIndex, minPropertyIndex, maxPropertyIndex } = selectionBounds;
+    const isTop = rowIndex === minRowIndex;
+    const isBottom = rowIndex === maxRowIndex;
+    const isLeft = propertyIndex === minPropertyIndex;
+    const isRight = propertyIndex === maxPropertyIndex;
+    
+    const classes: string[] = [];
+    if (isTop) classes.push(styles.selectionBorderTop);
+    if (isBottom) classes.push(styles.selectionBorderBottom);
+    if (isLeft) classes.push(styles.selectionBorderLeft);
+    if (isRight) classes.push(styles.selectionBorderRight);
+    
+    return classes.join(' ');
+  }, [selectionBounds, selectedCells, orderedProperties, getAllRowsForCellSelection]);
+
+  // Calculate selection bounds when selectedCells changes
+  useEffect(() => {
+    if (selectedCells.size <= 1) {
+      setSelectionBounds(null);
+      return;
+    }
+    
+    const allRowsForSelection = getAllRowsForCellSelection();
+    let minRowIndex = Infinity;
+    let maxRowIndex = -Infinity;
+    let minPropertyIndex = Infinity;
+    let maxPropertyIndex = -Infinity;
+    
+    selectedCells.forEach((cellKey) => {
+      // Parse cellKey to get rowId and propertyKey
+      for (const property of orderedProperties) {
+        const propertyKeyWithDash = '-' + property.key;
+        if (cellKey.endsWith(propertyKeyWithDash)) {
+          const rowId = cellKey.substring(0, cellKey.length - propertyKeyWithDash.length);
+          const propertyKey = property.key;
+          
+          const rowIndex = allRowsForSelection.findIndex(r => r.id === rowId);
+          const propertyIndex = orderedProperties.findIndex(p => p.key === propertyKey);
+          
+          if (rowIndex !== -1 && propertyIndex !== -1) {
+            minRowIndex = Math.min(minRowIndex, rowIndex);
+            maxRowIndex = Math.max(maxRowIndex, rowIndex);
+            minPropertyIndex = Math.min(minPropertyIndex, propertyIndex);
+            maxPropertyIndex = Math.max(maxPropertyIndex, propertyIndex);
+          }
+          break;
+        }
+      }
+    });
+    
+    if (minRowIndex !== Infinity && maxRowIndex !== -Infinity && 
+        minPropertyIndex !== Infinity && maxPropertyIndex !== -Infinity) {
+      setSelectionBounds({
+        minRowIndex,
+        maxRowIndex,
+        minPropertyIndex,
+        maxPropertyIndex,
+      });
+    } else {
+      setSelectionBounds(null);
+    }
+  }, [selectedCells, getAllRowsForCellSelection, orderedProperties]);
 
   // Handle Cut operation
   const handleCut = useCallback(() => {
@@ -3423,11 +3510,14 @@ export function LibraryAssetsTable({
                         cutBorderClass = borderClasses.join(' ');
                       }
                       
+                      // Check if cell is on border of selection (only show outer border)
+                      const selectionBorderClass = getSelectionBorderClasses(row.id, propertyIndex);
+                      
                       return (
                         <td
                           key={property.id}
                           data-property-key={property.key}
-                          className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
+                          className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
                           onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                           onClick={(e) => handleCellClick(row.id, property.key, e)}
                           onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
@@ -3503,11 +3593,14 @@ export function LibraryAssetsTable({
                       cutBorderClass = borderClasses.join(' ');
                     }
                     
+                    // Check if cell is on border of selection (only show outer border)
+                    const selectionBorderClass = getSelectionBorderClasses(row.id, propertyIndex);
+                    
                     return (
                       <td
                         key={property.id}
                         data-property-key={property.key}
-                        className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
+                        className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
@@ -3603,11 +3696,14 @@ export function LibraryAssetsTable({
                       cutBorderClass = borderClasses.join(' ');
                     }
                     
+                    // Check if cell is on border of selection (only show outer border)
+                    const selectionBorderClass = getSelectionBorderClasses(row.id, propertyIndex);
+                    
                     return (
                       <td
                         key={property.id}
                         data-property-key={property.key}
-                        className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
+                        className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
@@ -3710,11 +3806,14 @@ export function LibraryAssetsTable({
                       cutBorderClass = borderClasses.join(' ');
                     }
                     
+                    // Check if cell is on border of selection (only show outer border)
+                    const selectionBorderClass = getSelectionBorderClasses(row.id, propertyIndex);
+                    
                     return (
                       <td
                         key={property.id}
                         data-property-key={property.key}
-                        className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
+                        className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
@@ -3860,11 +3959,14 @@ export function LibraryAssetsTable({
                     cutBorderClass = borderClasses.join(' ');
                   }
                   
+                  // Check if cell is on border of selection (only show outer border)
+                  const selectionBorderClass = getSelectionBorderClasses(row.id, propertyIndex);
+                  
                   return (
                     <td
                       key={property.id}
                       data-property-key={property.key}
-                      className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
+                      className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
                       onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                       onClick={(e) => handleCellClick(row.id, property.key, e)}
                       onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
