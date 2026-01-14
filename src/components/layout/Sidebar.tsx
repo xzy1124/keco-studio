@@ -811,7 +811,9 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                       onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
                     >
                       <div className={styles.itemMain}>
-                        <span className={styles.itemText} title={asset.name}>{truncateText(asset.name, 15)}</span>
+                        <span className={styles.itemText} title={asset.name && asset.name !== 'Untitled' ? asset.name : ''}>
+                          {truncateText(asset.name && asset.name !== 'Untitled' ? asset.name : '', 15)}
+                        </span>
                       </div>
                       <div className={styles.itemActions}>
                       </div>
@@ -976,7 +978,9 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                   onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
                 >
                   <div className={styles.itemMain}>
-                    <span className={styles.itemText} title={asset.name}>{truncateText(asset.name, 15)}</span>
+                    <span className={styles.itemText} title={asset.name && asset.name !== 'Untitled' ? asset.name : ''}>
+                      {truncateText(asset.name && asset.name !== 'Untitled' ? asset.name : '', 15)}
+                    </span>
                   </div>
                   <div className={styles.itemActions}>
                   </div>
@@ -1594,7 +1598,9 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                                 onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
                               >
                                 <div className={styles.itemMain}>
-                                  <span className={styles.itemText} title={asset.name}>{truncateText(asset.name, 20)}</span>
+                                  <span className={styles.itemText} title={asset.name && asset.name !== 'Untitled' ? asset.name : ''}>
+                                    {truncateText(asset.name && asset.name !== 'Untitled' ? asset.name : '', 20)}
+                                  </span>
                                 </div>
                                 <div className={styles.itemActions}>
                                 </div>

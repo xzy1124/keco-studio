@@ -1468,31 +1468,24 @@ export function LibraryAssetsTable({
     e.preventDefault();
     e.stopPropagation();
     
-    // If there are selected cells, show batch edit menu instead of row delete menu
+    // Priority 1: If there are selected rows (via checkbox), use row selection
+    // Clear any cell selection first to avoid conflicts
+    if (selectedRowIds.size > 0) {
+      setSelectedCells(new Set());
+      // Show batch edit menu (operations will use selectedRowIds)
+      setBatchEditMenuVisible(true);
+      setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
+      return;
+    }
+    
+    // Priority 2: If there are selected cells (from drag selection), show batch edit menu
     if (selectedCells.size > 0) {
       setBatchEditMenuVisible(true);
       setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
       return;
     }
     
-    // If there are selected rows (via checkbox), select all cells in all selected rows and show batch edit menu
-    if (selectedRowIds.size > 0) {
-      // Select all cells in all selected rows
-      const allRowCellKeys: CellKey[] = [];
-      selectedRowIds.forEach(selectedRowId => {
-        orderedProperties.forEach(property => {
-          allRowCellKeys.push(`${selectedRowId}-${property.key}` as CellKey);
-        });
-      });
-      setSelectedCells(new Set(allRowCellKeys));
-      
-      // Show batch edit menu
-      setBatchEditMenuVisible(true);
-      setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
-      return;
-    }
-    
-    // Otherwise show normal row context menu
+    // Priority 3: Otherwise show normal row context menu
     setContextMenuRowId(row.id);
     setContextMenuPosition({ x: e.clientX, y: e.clientY });
   };
@@ -1502,26 +1495,18 @@ export function LibraryAssetsTable({
     e.preventDefault();
     e.stopPropagation();
     
-    // Priority 1: If there are already selected cells (from drag selection), use them
-    // This takes priority over checkbox selection to preserve user's drag selection
-    if (selectedCells.size > 0) {
+    // Priority 1: If there are selected rows (via checkbox), use row selection
+    // Clear any cell selection first to avoid conflicts
+    if (selectedRowIds.size > 0) {
+      setSelectedCells(new Set());
+      // Show batch edit menu (operations will use selectedRowIds)
       setBatchEditMenuVisible(true);
       setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
       return;
     }
     
-    // Priority 2: If there are selected rows (via checkbox), select all cells in all selected rows and show batch edit menu
-    if (selectedRowIds.size > 0) {
-      // Select all cells in all selected rows
-      const allRowCellKeys: CellKey[] = [];
-      selectedRowIds.forEach(selectedRowId => {
-        orderedProperties.forEach(property => {
-          allRowCellKeys.push(`${selectedRowId}-${property.key}` as CellKey);
-        });
-      });
-      setSelectedCells(new Set(allRowCellKeys));
-      
-      // Show batch edit menu
+    // Priority 2: If there are already selected cells (from drag selection), use them
+    if (selectedCells.size > 0) {
       setBatchEditMenuVisible(true);
       setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
       return;
@@ -1567,8 +1552,23 @@ export function LibraryAssetsTable({
   // Handle Cut operation
   const handleCut = useCallback(() => {
     console.log('handleCut called, selectedCells:', selectedCells);
+    console.log('selectedRowIds:', selectedRowIds);
     
-    if (selectedCells.size === 0) {
+    // If rows are selected but cells are not, convert rows to cells
+    let cellsToCut = selectedCells;
+    if (selectedCells.size === 0 && selectedRowIds.size > 0) {
+      console.log('Converting selected rows to cells for cut operation');
+      const allRowCellKeys: CellKey[] = [];
+      selectedRowIds.forEach(selectedRowId => {
+        orderedProperties.forEach(property => {
+          allRowCellKeys.push(`${selectedRowId}-${property.key}` as CellKey);
+        });
+      });
+      cellsToCut = new Set(allRowCellKeys);
+      setSelectedCells(cellsToCut);
+    }
+    
+    if (cellsToCut.size === 0) {
       console.log('No cells selected');
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
@@ -1585,7 +1585,7 @@ export function LibraryAssetsTable({
     const validCells: CellKey[] = [];
 
     // Check each selected cell and validate data type
-    selectedCells.forEach((cellKey) => {
+    cellsToCut.forEach((cellKey) => {
       // cellKey format: "${row.id}-${property.key}"
       // Both row.id and property.key can be UUIDs containing multiple '-'
       // Strategy: try matching each property.key from the end of cellKey
@@ -1783,7 +1783,8 @@ export function LibraryAssetsTable({
     // Clear row selection and cell selection after cut operation
     // This allows user to select other rows for paste
     setSelectedRowIds(new Set());
-    // Note: Don't clear selectedCells here because we need to show the dashed border
+    setSelectedCells(new Set());
+    // Note: cutCells and cutSelectionBounds are still set to show the dashed border
     // The cells will be cleared after paste operation
     
     // Auto-hide toast after 2 seconds
@@ -2301,8 +2302,9 @@ export function LibraryAssetsTable({
       setIsCutOperation(false);
     }
     
-    // Clear selected cells (optional, you might want to keep selection)
-    // setSelectedCells(new Set());
+    // Clear selected cells and rows after paste operation
+    setSelectedCells(new Set());
+    setSelectedRowIds(new Set());
     
     // Show toast message
     setToastMessage('Content pasted');
@@ -2315,7 +2317,7 @@ export function LibraryAssetsTable({
     setBatchEditMenuPosition(null);
     
     console.log('handlePaste completed successfully');
-  }, [clipboardData, selectedCells, getAllRowsForCellSelection, orderedProperties, isCutOperation, cutCells, onSaveAsset, onUpdateAsset, library]);
+  }, [clipboardData, selectedCells, selectedRowIds, getAllRowsForCellSelection, orderedProperties, isCutOperation, cutCells, onSaveAsset, onUpdateAsset, library]);
 
   // Handle Insert Row Above operation
   const handleInsertRowAbove = useCallback(async () => {
@@ -3206,32 +3208,7 @@ export function LibraryAssetsTable({
                 data-row-id={row.id}
                 className={`${styles.row} ${isRowSelected ? styles.rowSelected : ''}`}
                 onContextMenu={(e) => {
-                  // If there are selected cells, show batch edit menu
-                  if (selectedCells.size > 0) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setBatchEditMenuVisible(true);
-                    setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
-                  } else if (selectedRowIds.size > 0) {
-                    // If there are selected rows (via checkbox), select all cells in all selected rows and show batch edit menu
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    // Select all cells in all selected rows
-                    const allRowCellKeys: CellKey[] = [];
-                    selectedRowIds.forEach(selectedRowId => {
-                      orderedProperties.forEach(property => {
-                        allRowCellKeys.push(`${selectedRowId}-${property.key}` as CellKey);
-                      });
-                    });
-                    setSelectedCells(new Set(allRowCellKeys));
-                    
-                    // Show batch edit menu
-                    setBatchEditMenuVisible(true);
-                    setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
-                  } else {
-                    handleRowContextMenu(e, row);
-                  }
+                  handleRowContextMenu(e, row);
                 }}
                 onMouseEnter={() => setHoveredRowId(row.id)}
                 onMouseLeave={() => setHoveredRowId(null)}
@@ -4134,30 +4111,20 @@ export function LibraryAssetsTable({
         {/* Title: ACTIONS */}
         <div className={styles.batchEditMenuTitle}>ACTIONS</div>
         
-        {/* Cut - only enabled when cells are selected (not just rows via checkbox) */}
+        {/* Cut - enabled when cells or rows are selected */}
         <div
           className={styles.batchEditMenuItem}
-          style={{
-            opacity: selectedRowIds.size > 0 ? 0.5 : 1,
-            cursor: selectedRowIds.size > 0 ? 'not-allowed' : 'pointer',
-          }}
           onMouseEnter={(e) => {
-            if (selectedRowIds.size === 0) {
-              e.currentTarget.style.backgroundColor = '#fff1f0';
-            }
+            e.currentTarget.style.backgroundColor = '#fff1f0';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
           onClick={(e) => {
-            if (selectedRowIds.size > 0) {
-              e.preventDefault();
-              e.stopPropagation();
-              return;
-            }
             e.preventDefault();
             e.stopPropagation();
             console.log('Cut button clicked, selectedCells:', Array.from(selectedCells));
+            console.log('selectedRowIds:', Array.from(selectedRowIds));
             console.log('Calling handleCut function');
             try {
               handleCut();
@@ -4169,46 +4136,32 @@ export function LibraryAssetsTable({
           <span className={styles.batchEditMenuText}>Cut</span>
         </div>
         
-        {/* Copy - only enabled when cells are selected (not just rows via checkbox) */}
+        {/* Copy */}
         <div
           className={styles.batchEditMenuItem}
-          style={{
-            opacity: selectedRowIds.size > 0 ? 0.5 : 1,
-            cursor: selectedRowIds.size > 0 ? 'not-allowed' : 'pointer',
-          }}
           onMouseEnter={(e) => {
-            if (selectedRowIds.size === 0) {
-              e.currentTarget.style.backgroundColor = '#fff1f0';
-            }
+            e.currentTarget.style.backgroundColor = '#fff1f0';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
           onClick={() => {
-            if (selectedRowIds.size > 0) return;
             handleCopy();
           }}
         >
           <span className={styles.batchEditMenuText}>Copy</span>
         </div>
         
-        {/* Paste - only enabled when cells are selected (not just rows via checkbox) */}
+        {/* Paste */}
         <div
           className={styles.batchEditMenuItem}
-          style={{
-            opacity: selectedRowIds.size > 0 ? 0.5 : 1,
-            cursor: selectedRowIds.size > 0 ? 'not-allowed' : 'pointer',
-          }}
           onMouseEnter={(e) => {
-            if (selectedRowIds.size === 0) {
-              e.currentTarget.style.backgroundColor = '#fff1f0';
-            }
+            e.currentTarget.style.backgroundColor = '#fff1f0';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
           onClick={() => {
-            if (selectedRowIds.size > 0) return;
             handlePaste();
           }}
         >
@@ -4217,46 +4170,32 @@ export function LibraryAssetsTable({
         
         <div className={styles.batchEditMenuDivider}></div>
         
-        {/* Insert row above - only enabled when cells are selected (not just rows via checkbox) */}
+        {/* Insert row above */}
         <div
           className={styles.batchEditMenuItem}
-          style={{
-            opacity: selectedRowIds.size > 0 ? 0.5 : 1,
-            cursor: selectedRowIds.size > 0 ? 'not-allowed' : 'pointer',
-          }}
           onMouseEnter={(e) => {
-            if (selectedRowIds.size === 0) {
-              e.currentTarget.style.backgroundColor = '#f3f4f6';
-            }
+            e.currentTarget.style.backgroundColor = '#f3f4f6';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
           onClick={() => {
-            if (selectedRowIds.size > 0) return;
             handleInsertRowAbove();
           }}
         >
           <span className={styles.batchEditMenuText}>Insert row above</span>
         </div>
         
-        {/* Insert row below - only enabled when cells are selected (not just rows via checkbox) */}
+        {/* Insert row below */}
         <div
           className={styles.batchEditMenuItem}
-          style={{
-            opacity: selectedRowIds.size > 0 ? 0.5 : 1,
-            cursor: selectedRowIds.size > 0 ? 'not-allowed' : 'pointer',
-          }}
           onMouseEnter={(e) => {
-            if (selectedRowIds.size === 0) {
-              e.currentTarget.style.backgroundColor = '#f3f4f6';
-            }
+            e.currentTarget.style.backgroundColor = '#f3f4f6';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
           onClick={() => {
-            if (selectedRowIds.size > 0) return;
             handleInsertRowBelow();
           }}
         >
