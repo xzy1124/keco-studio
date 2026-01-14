@@ -115,20 +115,56 @@
   background-color: rgba(151, 71, 255, 0.09) !important;
 }
 
+/* Selected cells should not have background color even when row is hovered */
+.row:hover .cellSelected {
+  background-color: transparent !important;
+}
+
+.row:hover .cellSelected:hover {
+  background-color: transparent !important;
+}
+
+/* Single cell selected: only border, no background */
 .cellSelected {
-  background-color: rgba(94, 0, 255, 0.1) !important;
-  border: 1px solid rgba(94, 0, 255, 0.3) !important;
+  background-color: transparent !important;
+  border: 2px solid rgba(135, 38, 238, 1) !important;
   position: relative;
   z-index: 1;
 }
 
 .cellSelected:hover {
-  background-color: rgba(94, 0, 255, 0.12) !important;
+  background-color: transparent !important;
 }
 
 /* Ensure selected cells have proper border during drag */
 .cellSelected:not(:first-child) {
-  border-left: 1px solid rgba(94, 0, 255, 0.3) !important;
+  border-left: 2px solid rgba(135, 38, 238, 1) !important;
+}
+
+/* Multiple cells selected: border + background color */
+.cellMultipleSelected {
+  background-color: rgba(135, 38, 238, 0.1) !important;
+  border: 2px solid rgba(135, 38, 238, 1) !important;
+  position: relative;
+  z-index: 1;
+}
+
+.cellMultipleSelected:hover {
+  background-color: rgba(135, 38, 238, 0.12) !important;
+}
+
+/* Ensure multiple selected cells have proper border during drag */
+.cellMultipleSelected:not(:first-child) {
+  border-left: 2px solid rgba(135, 38, 238, 1) !important;
+}
+
+/* Multiple selected cells should have background even when row is hovered */
+.row:hover .cellMultipleSelected {
+  background-color: rgba(135, 38, 238, 0.1) !important;
+}
+
+.row:hover .cellMultipleSelected:hover {
+  background-color: rgba(135, 38, 238, 0.12) !important;
 }
 
 /* Cut cells: dashed border - only show outer border */

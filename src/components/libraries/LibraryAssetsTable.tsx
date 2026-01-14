@@ -3403,6 +3403,8 @@ export function LibraryAssetsTable({
                       const isCellSelected = selectedCells.has(cellKey);
                       const isCellCut = cutCells.has(cellKey);
                       const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                      const isMultipleSelected = selectedCells.size > 1 && isCellSelected;
+                      const isSingleSelected = selectedCells.size === 1 && isCellSelected;
                       
                       // Check if cell is on border of cut selection (only show outer border)
                       let cutBorderClass = '';
@@ -3425,7 +3427,7 @@ export function LibraryAssetsTable({
                         <td
                           key={property.id}
                           data-property-key={property.key}
-                          className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
+                          className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
                           onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                           onClick={(e) => handleCellClick(row.id, property.key, e)}
                           onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
@@ -3481,6 +3483,8 @@ export function LibraryAssetsTable({
                     const isCellSelected = selectedCells.has(cellKey);
                     const isCellCut = cutCells.has(cellKey);
                     const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                    const isMultipleSelected = selectedCells.size > 1 && isCellSelected;
+                    const isSingleSelected = selectedCells.size === 1 && isCellSelected;
                     
                     // Check if cell is on border of cut selection (only show outer border)
                     let cutBorderClass = '';
@@ -3503,7 +3507,7 @@ export function LibraryAssetsTable({
                       <td
                         key={property.id}
                         data-property-key={property.key}
-                        className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
+                        className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
@@ -3579,6 +3583,8 @@ export function LibraryAssetsTable({
                     const isCellSelected = selectedCells.has(cellKey);
                     const isCellCut = cutCells.has(cellKey);
                     const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                    const isMultipleSelected = selectedCells.size > 1 && isCellSelected;
+                    const isSingleSelected = selectedCells.size === 1 && isCellSelected;
                     
                     // Check if cell is on border of cut selection (only show outer border)
                     let cutBorderClass = '';
@@ -3601,7 +3607,7 @@ export function LibraryAssetsTable({
                       <td
                         key={property.id}
                         data-property-key={property.key}
-                        className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
+                        className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
@@ -3684,6 +3690,8 @@ export function LibraryAssetsTable({
                     const isCellSelected = selectedCells.has(cellKey);
                     const isCellCut = cutCells.has(cellKey);
                     const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                    const isMultipleSelected = selectedCells.size > 1 && isCellSelected;
+                    const isSingleSelected = selectedCells.size === 1 && isCellSelected;
                     
                     // Check if cell is on border of cut selection (only show outer border)
                     let cutBorderClass = '';
@@ -3706,7 +3714,7 @@ export function LibraryAssetsTable({
                       <td
                         key={property.id}
                         data-property-key={property.key}
-                        className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
+                        className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
@@ -3832,6 +3840,8 @@ export function LibraryAssetsTable({
                   const isCellCut = cutCells.has(cellKey);
                   // Only show expand icon when exactly one cell is selected and this cell is selected
                   const showExpandIcon = selectedCells.size === 1 && isCellSelected;
+                  const isMultipleSelected = selectedCells.size > 1 && isCellSelected;
+                  const isSingleSelected = selectedCells.size === 1 && isCellSelected;
                   
                   // Check if cell is on border of cut selection (only show outer border)
                   let cutBorderClass = '';
@@ -3854,7 +3864,7 @@ export function LibraryAssetsTable({
                     <td
                       key={property.id}
                       data-property-key={property.key}
-                      className={`${styles.cell} ${isCellSelected ? styles.cellSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
+                      className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass}`}
                       onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                       onClick={(e) => handleCellClick(row.id, property.key, e)}
                       onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
