@@ -2298,7 +2298,7 @@ export function LibraryAssetsTable({
       setIsCutOperation(false);
       
       // Group cut cells by rowId
-      const cutCellsByRow = new Map<string, Record<string, any>>();
+      const cutCellsByRow = new Map<string, { propertyValues: Record<string, any>; name: string }>();
       
       cutCellsToClear.forEach((cellKey) => {
         // Parse cellKey to get rowId and propertyKey
@@ -2319,11 +2319,21 @@ export function LibraryAssetsTable({
           if (row) {
             if (!cutCellsByRow.has(rowId)) {
               // Copy all existing property values (may include boolean and other types)
-              cutCellsByRow.set(rowId, { ...row.propertyValues });
+              cutCellsByRow.set(rowId, { propertyValues: { ...row.propertyValues }, name: row.name || 'Untitled' });
             }
             const rowUpdates = cutCellsByRow.get(rowId);
             if (rowUpdates) {
-              rowUpdates[propertyKey] = null; // Clear the cell
+              // Check if this is the name field (first property)
+              const propertyIndex = orderedProperties.findIndex(p => p.key === propertyKey);
+              const isNameField = propertyIndex === 0;
+              
+              if (isNameField) {
+                // Clear the name field
+                rowUpdates.name = 'Untitled';
+              } else {
+                // Clear the property value
+                rowUpdates.propertyValues[propertyKey] = null;
+              }
             }
           }
         }
@@ -2332,11 +2342,10 @@ export function LibraryAssetsTable({
       // Apply clearing updates (async, but cut state is already cleared)
       setIsSaving(true);
       try {
-        for (const [rowId, propertyValues] of cutCellsByRow.entries()) {
+        for (const [rowId, rowData] of cutCellsByRow.entries()) {
           const row = allRowsForSelection.find(r => r.id === rowId);
           if (row) {
-            const assetName = row.name || 'Untitled';
-            await onUpdateAsset(rowId, assetName, propertyValues);
+            await onUpdateAsset(rowId, rowData.name, rowData.propertyValues);
           }
         }
       } catch (error) {
