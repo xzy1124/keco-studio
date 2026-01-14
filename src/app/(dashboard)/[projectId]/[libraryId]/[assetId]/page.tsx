@@ -493,7 +493,19 @@ export default function AssetPage() {
             <div className={styles.headerRight}>
               {saveError && <div className={styles.saveError}>{saveError}</div>}
               {saveSuccess && <div className={styles.saveSuccess}>{saveSuccess}</div>}
-              {!isNewAsset && userProfile && mode === 'edit' && (
+              {(() => {
+                console.log('=== Save button visibility check ===');
+                console.log('isNewAsset:', isNewAsset);
+                console.log('userProfile:', userProfile);
+                console.log('isAuthenticated:', isAuthenticated);
+                console.log('mode:', mode);
+                console.log('!isNewAsset:', !isNewAsset);
+                console.log('mode === \'edit\':', mode === 'edit');
+                console.log('Should show button (with userProfile):', !isNewAsset && userProfile && mode === 'edit');
+                console.log('Should show button (with isAuthenticated):', !isNewAsset && isAuthenticated && mode === 'edit');
+                return null;
+              })()}
+              {!isNewAsset && isAuthenticated && mode === 'edit' && (
                 <button
                   onClick={handleSave}
                   disabled={saving}
