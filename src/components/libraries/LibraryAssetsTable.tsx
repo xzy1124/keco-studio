@@ -55,76 +55,76 @@ export function LibraryAssetsTable({
   onUpdateAsset,
   onDeleteAsset,
 }: LibraryAssetsTableProps) {
-  // Yjs integration - 统一数据源，解决行混乱问题
+  // Yjs integration - unified data source to resolve row ordering issues
   const { yRows } = useYjs();
   const yjsRows = useYjsRows(yRows);
   
-  // 初始化：将 props.rows 同步到 Yjs（仅第一次，且 Yjs 为空时）
+  // Initialize: sync props.rows to Yjs (only on first time, when Yjs is empty)
   useEffect(() => {
     if (yRows.length === 0 && rows.length > 0) {
-      // 只在 Yjs 为空且 props 有数据时初始化
+      // Only initialize when Yjs is empty and props has data
       yRows.insert(0, rows);
     } else if (yRows.length > 0 && rows.length > 0) {
-      // 如果 Yjs 已有数据，但 props 更新了（比如从数据库刷新），需要同步
-      // 更新已存在的行，添加新行，删除不存在的行（但保留临时行和正在编辑的行）
+      // If Yjs already has data but props updated (e.g., from database refresh), need to sync
+      // Update existing rows, add new rows, delete non-existent rows (but keep temp rows and rows being edited)
       const yjsRowsArray = yRows.toArray();
       const existingIds = new Set(yjsRowsArray.map(r => r.id));
       const propsIds = new Set(rows.map(r => r.id));
       
-      // 找出需要更新的行、新增的行、需要删除的行（但不删除临时行和正在编辑的行）
+      // Find rows to update, add, and delete (but don't delete temp rows and rows being edited)
       const rowsToUpdate: Array<{ index: number; row: AssetRow }> = [];
       const rowsToAdd: AssetRow[] = [];
       const indicesToDelete: number[] = [];
       
-      // 检查 Yjs 中的每一行
+      // Check each row in Yjs
       yjsRowsArray.forEach((yjsRow, index) => {
-        // 如果是临时行（以 temp- 开头），保留它
+        // If it's a temp row (starts with 'temp-'), keep it
         if (yjsRow.id.startsWith('temp-')) {
           return;
         }
         
-        // 如果正在编辑这一行，不更新它（避免覆盖用户的编辑）
+        // If this row is being edited, don't update it (avoid overwriting user edits)
         if (editingRowId === yjsRow.id) {
           return;
         }
         
-        // 如果在 props 中存在，更新它
+        // If it exists in props, update it
         const propsRow = rows.find(r => r.id === yjsRow.id);
         if (propsRow) {
-          // 只有当 props 中的行与 Yjs 中的行不同时才更新（避免不必要的更新）
+          // Only update if the row in props differs from Yjs (avoid unnecessary updates)
           const yjsRowStr = JSON.stringify({ ...yjsRow, propertyValues: yjsRow.propertyValues });
           const propsRowStr = JSON.stringify({ ...propsRow, propertyValues: propsRow.propertyValues });
           if (yjsRowStr !== propsRowStr) {
             rowsToUpdate.push({ index, row: propsRow });
           }
         } else {
-          // 如果不在 props 中，标记为删除（但保留临时行和正在编辑的行）
+          // If not in props, mark for deletion (but keep temp rows and rows being edited)
           indicesToDelete.push(index);
         }
       });
       
-      // 找出需要新增的行
+      // Find rows to add
       rows.forEach(propsRow => {
         if (!existingIds.has(propsRow.id)) {
           rowsToAdd.push(propsRow);
         }
       });
       
-      // 倒序删除（避免索引变化）
+      // Delete in reverse order (avoid index changes)
       indicesToDelete.sort((a, b) => b - a).forEach(index => {
         yRows.delete(index, 1);
       });
       
-      // 倒序更新（避免索引变化）
+      // Update in reverse order (avoid index changes)
       rowsToUpdate.sort((a, b) => b.index - a.index).forEach(({ index, row }) => {
         yRows.delete(index, 1);
         yRows.insert(index, [row]);
       });
       
-      // 添加新行
-      // 如果有 insert 创建的临时行，优先替换它们（保持位置）
+      // Add new rows
+      // If there are temp rows created by insert, prioritize replacing them (maintain position)
       if (rowsToAdd.length > 0) {
-        // 重新查找 insert 创建的临时行（在删除/更新之后）
+        // Re-find temp rows created by insert (after delete/update)
         const currentYjsRows = yRows.toArray();
         const insertTempRows: Array<{ index: number; id: string }> = [];
         currentYjsRows.forEach((row, index) => {
@@ -132,21 +132,21 @@ export function LibraryAssetsTable({
             insertTempRows.push({ index, id: row.id });
           }
         });
-        // 按索引从小到大排序（保持插入顺序）
+        // Sort by index ascending (maintain insert order)
         insertTempRows.sort((a, b) => a.index - b.index);
         
-        // 优先替换 insert 临时行（保持插入位置）
+        // Prioritize replacing insert temp rows (maintain insert position)
         const rowsToReplace = rowsToAdd.slice(0, Math.min(insertTempRows.length, rowsToAdd.length));
-        // 倒序替换（从索引大的开始），避免索引变化
+        // Replace in reverse order (from larger index), avoid index changes
         for (let i = rowsToReplace.length - 1; i >= 0; i--) {
           const newRow = rowsToReplace[i];
           const tempRow = insertTempRows[i];
-          // 替换临时行（保持位置）
+          // Replace temp row (maintain position)
           yRows.delete(tempRow.index, 1);
           yRows.insert(tempRow.index, [newRow]);
         }
         
-        // 剩余的新行添加到末尾
+        // Add remaining new rows to the end
         const remainingRows = rowsToAdd.slice(insertTempRows.length);
         if (remainingRows.length > 0) {
           yRows.insert(yRows.length, remainingRows);
@@ -154,9 +154,9 @@ export function LibraryAssetsTable({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, yRows]); // editingRowId 在下面定义，这里不包含它，避免循环依赖
+  }, [rows, yRows]); // editingRowId is defined below, not included here to avoid circular dependency
   
-  // 使用 Yjs 的 rows 作为主要数据源，如果 Yjs 为空则使用 props.rows（兼容性）
+  // Use Yjs rows as primary data source, fallback to props.rows if Yjs is empty (compatibility)
   const allRowsSource = yjsRows.length > 0 ? yjsRows : rows;
   
   const [isAddingRow, setIsAddingRow] = useState(false);
@@ -711,11 +711,11 @@ export function LibraryAssetsTable({
       handleEditInputChange(referenceModalProperty.key, assetId);
     } else {
       // For existing row not in edit mode, update the asset directly
-      // 使用 allRowsSource (Yjs 数据源) 而不是 rows
+      // Use allRowsSource (Yjs data source) instead of rows
       const row = allRowsSource.find(r => r.id === referenceModalRowId);
       
       if (row && onUpdateAsset) {
-        // 立即更新 Yjs (乐观更新)
+        // Immediately update Yjs (optimistic update)
         const allRows = yRows.toArray();
         const rowIndex = allRows.findIndex(r => r.id === referenceModalRowId);
         
@@ -728,12 +728,12 @@ export function LibraryAssetsTable({
             propertyValues: updatedPropertyValues
           };
           
-          // 更新 Yjs
+          // Update Yjs
           yRows.delete(rowIndex, 1);
           yRows.insert(rowIndex, [updatedRow]);
         }
         
-        // 异步更新数据库
+        // Asynchronously update database
         const updatedPropertyValues = { ...row.propertyValues };
         updatedPropertyValues[referenceModalProperty.key] = assetId;
         await onUpdateAsset(row.id, row.name, updatedPropertyValues);
@@ -924,7 +924,7 @@ export function LibraryAssetsTable({
       propertyValues: { ...newRowData },
     };
 
-    // Optimistically add the asset to Yjs immediately (解决行混乱问题)
+    // Optimistically add the asset to Yjs immediately (resolve row ordering issues)
     yRows.insert(yRows.length, [optimisticAsset]);
     
     // Also add to optimisticNewAssets for compatibility
@@ -945,7 +945,7 @@ export function LibraryAssetsTable({
       // Remove optimistic asset after a short delay to allow parent to refresh
       // The parent refresh will replace it with the real asset
       setTimeout(() => {
-        // 从 Yjs 中移除临时行（如果还在）
+        // Remove temp row from Yjs (if still exists)
         const index = yRows.toArray().findIndex(r => r.id === tempId);
         if (index >= 0) {
           yRows.delete(index, 1);
@@ -1253,7 +1253,7 @@ export function LibraryAssetsTable({
   const handleSaveEditedRow = async (assetId: string, assetName: string) => {
     if (!onUpdateAsset) return;
 
-    // 立即更新 Yjs (乐观更新，解决保存问题)
+    // Immediately update Yjs (optimistic update, resolve save issues)
     const allRows = yRows.toArray();
     const rowIndex = allRows.findIndex(r => r.id === assetId);
     
@@ -1265,7 +1265,7 @@ export function LibraryAssetsTable({
         propertyValues: { ...editingRowData }
       };
       
-      // 更新 Yjs
+      // Update Yjs
       yRows.delete(rowIndex, 1);
       yRows.insert(rowIndex, [updatedRow]);
     }
@@ -1395,7 +1395,7 @@ export function LibraryAssetsTable({
   };
 
   // Get all rows for cell selection (helper function)
-  // 使用 Yjs 作为数据源，保证所有操作都基于同一个数组
+  // Use Yjs as data source to ensure all operations are based on the same array
   const getAllRowsForCellSelection = useCallback(() => {
     const allRowsForSelection = allRowsSource
       .filter((row): row is AssetRow => !deletedAssetIds.has(row.id))
@@ -1795,13 +1795,9 @@ export function LibraryAssetsTable({
 
   // Handle Cut operation
   const handleCut = useCallback(() => {
-    console.log('handleCut called, selectedCells:', selectedCells);
-    console.log('selectedRowIds:', selectedRowIds);
-    
     // If rows are selected but cells are not, convert rows to cells
     let cellsToCut = selectedCells;
     if (selectedCells.size === 0 && selectedRowIds.size > 0) {
-      console.log('Converting selected rows to cells for cut operation');
       const allRowCellKeys: CellKey[] = [];
       selectedRowIds.forEach(selectedRowId => {
         orderedProperties.forEach(property => {
@@ -1813,7 +1809,6 @@ export function LibraryAssetsTable({
     }
     
     if (cellsToCut.size === 0) {
-      console.log('No cells selected');
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
       return;
@@ -1821,8 +1816,6 @@ export function LibraryAssetsTable({
 
     // Get all rows for selection
     const allRowsForSelection = getAllRowsForCellSelection();
-    console.log('allRowsForSelection:', allRowsForSelection.length, 'rows');
-    console.log('orderedProperties:', orderedProperties.length, 'properties');
     
     // Group selected cells by row to build a 2D array
     const cellsByRow = new Map<string, Array<{ propertyKey: string; rowId: string; value: string | number | null }>>();
@@ -1850,40 +1843,23 @@ export function LibraryAssetsTable({
       }
       
       if (!foundProperty) {
-        console.log('Could not find matching property for cellKey:', cellKey);
-        console.log('Available property keys with dataTypes:', orderedProperties.map(p => `${p.key} (${p.dataType || 'undefined'})`));
-        console.log('Debug: checking matches...');
-        // Debug: show what we're trying to match
-        orderedProperties.forEach(p => {
-          const propertyKeyWithDash = '-' + p.key;
-          const matches = cellKey.endsWith(propertyKeyWithDash);
-          if (matches) {
-            console.log(`  ✓ Match found: "${propertyKeyWithDash}" matches cellKey ending`);
-          }
-        });
         return;
       }
       
-      console.log('Processing cell - rowId:', rowId, 'propertyKey:', propertyKey);
-      console.log('Property found:', foundProperty.key, 'dataType (from predefine):', foundProperty.dataType);
-      
       // Check if data type is supported (string, int, float)
-      // Note: dataType is defined during predefine (预定义时定义), we check the predefine type, not dynamic validation
+      // Note: dataType is defined during predefine, we check the predefine type, not dynamic validation
       if (!foundProperty.dataType) {
-        console.log('Property has no dataType defined in predefine, skipping');
         return;
       }
       
       const supportedTypes = ['string', 'int', 'float'];
       if (!supportedTypes.includes(foundProperty.dataType)) {
-        console.log('Unsupported data type (from predefine):', foundProperty.dataType, '- only string/int/float are supported for cut/copy/paste');
         return; // Skip unsupported types
       }
       
       // Find the row
       const row = allRowsForSelection.find(r => r.id === rowId);
       if (!row) {
-        console.log('Row not found:', rowId);
         return;
       }
       
@@ -1916,8 +1892,6 @@ export function LibraryAssetsTable({
         }
       }
       
-      console.log('Cell value:', value);
-      
       if (!cellsByRow.has(rowId)) {
         cellsByRow.set(rowId, []);
       }
@@ -1925,10 +1899,7 @@ export function LibraryAssetsTable({
       validCells.push(cellKey);
     });
 
-    console.log('Valid cells found:', validCells.length);
-
     if (validCells.length === 0) {
-      console.log('No valid cells to cut - no supported data types found');
       // Still show feedback even if no valid cells
       setToastMessage('No cells with supported types (string, int, float) selected');
       setTimeout(() => {
@@ -2013,7 +1984,6 @@ export function LibraryAssetsTable({
     setIsCutOperation(true);
     
     // Mark cells as cut (for dashed border visual feedback)
-    console.log('Setting cutCells with', validCells.length, 'cells:', Array.from(validCells));
     setCutCells(new Set(validCells));
     
     // Store selection bounds for border rendering (only show outer border)
@@ -2029,7 +1999,6 @@ export function LibraryAssetsTable({
     }
     
     // Show toast message immediately
-    console.log('Setting toast message: Content cut');
     setToastMessage('Content cut');
     
     // Close menu first
@@ -2045,20 +2014,15 @@ export function LibraryAssetsTable({
     
     // Auto-hide toast after 2 seconds
     setTimeout(() => {
-      console.log('Clearing toast message');
       setToastMessage(null);
     }, 2000);
   }, [selectedCells, getAllRowsForCellSelection, orderedProperties]);
 
   // Handle Copy operation
   const handleCopy = useCallback(() => {
-    console.log('handleCopy called, selectedCells:', selectedCells);
-    console.log('selectedRowIds:', selectedRowIds);
-    
     // If rows are selected but cells are not, convert rows to cells
     let cellsToCopy = selectedCells;
     if (selectedCells.size === 0 && selectedRowIds.size > 0) {
-      console.log('Converting selected rows to cells for copy operation');
       const allRowCellKeys: CellKey[] = [];
       selectedRowIds.forEach(selectedRowId => {
         orderedProperties.forEach(property => {
@@ -2070,7 +2034,6 @@ export function LibraryAssetsTable({
     }
     
     if (cellsToCopy.size === 0) {
-      console.log('No cells selected');
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
       return;
@@ -2078,8 +2041,6 @@ export function LibraryAssetsTable({
 
     // Get all rows for selection
     const allRowsForSelection = getAllRowsForCellSelection();
-    console.log('allRowsForSelection:', allRowsForSelection.length, 'rows');
-    console.log('orderedProperties:', orderedProperties.length, 'properties');
     
     // Group selected cells by row to build a 2D array
     const cellsByRow = new Map<string, Array<{ propertyKey: string; rowId: string; value: string | number | null }>>();
@@ -2107,31 +2068,23 @@ export function LibraryAssetsTable({
       }
       
       if (!foundProperty) {
-        console.log('Could not find matching property for cellKey:', cellKey);
-        console.log('Available property keys with dataTypes:', orderedProperties.map(p => `${p.key} (${p.dataType || 'undefined'})`));
         return;
       }
       
-      console.log('Processing cell - rowId:', rowId, 'propertyKey:', propertyKey);
-      console.log('Property found:', foundProperty.key, 'dataType (from predefine):', foundProperty.dataType);
-      
       // Check if data type is supported (string, int, float)
-      // Note: dataType is defined during predefine (预定义时定义), we check the predefine type, not dynamic validation
+      // Note: dataType is defined during predefine, we check the predefine type, not dynamic validation
       if (!foundProperty.dataType) {
-        console.log('Property has no dataType defined in predefine, skipping');
         return;
       }
       
       const supportedTypes = ['string', 'int', 'float'];
       if (!supportedTypes.includes(foundProperty.dataType)) {
-        console.log('Unsupported data type (from predefine):', foundProperty.dataType, '- only string/int/float are supported for cut/copy/paste');
         return; // Skip unsupported types
       }
       
       // Find the row
       const row = allRowsForSelection.find(r => r.id === rowId);
       if (!row) {
-        console.log('Row not found:', rowId);
         return;
       }
       
@@ -2164,8 +2117,6 @@ export function LibraryAssetsTable({
         }
       }
       
-      console.log('Cell value:', value);
-      
       if (!cellsByRow.has(rowId)) {
         cellsByRow.set(rowId, []);
       }
@@ -2173,10 +2124,7 @@ export function LibraryAssetsTable({
       validCells.push(cellKey);
     });
 
-    console.log('Valid cells found:', validCells.length);
-
     if (validCells.length === 0) {
-      console.log('No valid cells to copy - no supported data types found');
       // Still show feedback even if no valid cells
       setToastMessage('No cells with supported types (string, int, float) selected');
       setTimeout(() => {
@@ -2250,7 +2198,6 @@ export function LibraryAssetsTable({
     // Copy operation should not show visual feedback (no dashed border)
     
     // Show toast message immediately
-    console.log('Setting toast message: Content copied');
     setToastMessage('Content copied');
     
     // Close menu first
@@ -2263,20 +2210,14 @@ export function LibraryAssetsTable({
     
     // Auto-hide toast after 2 seconds
     setTimeout(() => {
-      console.log('Clearing toast message');
       setToastMessage(null);
     }, 2000);
   }, [selectedCells, selectedRowIds, getAllRowsForCellSelection, orderedProperties]);
 
   // Handle Paste operation
   const handlePaste = useCallback(async () => {
-    console.log('handlePaste called');
-    console.log('clipboardData:', clipboardData);
-    console.log('selectedCells:', selectedCells);
-    
     // Check if there is clipboard data
     if (!clipboardData || clipboardData.length === 0 || clipboardData[0].length === 0) {
-      console.log('No clipboard data to paste, clipboardData:', clipboardData);
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
       setToastMessage('No content to paste. Please copy or cut cells first.');
@@ -2301,7 +2242,6 @@ export function LibraryAssetsTable({
     
     // Check again if there are selected cells after conversion
     if (cellsToUse.size === 0) {
-      console.log('No cells selected for paste');
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
       setToastMessage('Please select cells to paste');
@@ -2333,7 +2273,6 @@ export function LibraryAssetsTable({
     }
     
     if (!foundStartProperty || !startRowId) {
-      console.log('Could not parse first selected cell:', firstSelectedCell);
       return;
     }
     
@@ -2342,12 +2281,8 @@ export function LibraryAssetsTable({
     const startPropertyIndex = orderedProperties.findIndex(p => p.key === startPropertyKey);
     
     if (startRowIndex === -1 || startPropertyIndex === -1) {
-      console.log('Could not find starting row or property');
       return;
     }
-    
-    console.log('Paste starting position - rowIndex:', startRowIndex, 'propertyIndex:', startPropertyIndex);
-    console.log('Clipboard data dimensions:', clipboardData.length, 'rows x', clipboardData[0].length, 'columns');
     
     // Store updates to apply
     const updatesToApply: Array<{ rowId: string; propertyKey: string; value: string | number | null }> = [];
@@ -2372,7 +2307,6 @@ export function LibraryAssetsTable({
         
         // Check if target property exists
         if (targetPropertyIndex >= orderedProperties.length) {
-          console.log('Target property index out of range:', targetPropertyIndex);
           return; // Skip if column is out of range
         }
         
@@ -2380,7 +2314,6 @@ export function LibraryAssetsTable({
         
         // Check if data type is supported (string, int, float)
         if (!targetProperty.dataType || !['string', 'int', 'float'].includes(targetProperty.dataType)) {
-          console.log('Unsupported data type for paste:', targetProperty.dataType);
           return; // Skip unsupported types
         }
         
@@ -2424,8 +2357,6 @@ export function LibraryAssetsTable({
     });
     
     const rowsToCreate = Array.from(rowsToCreateByIndex.values());
-    console.log('Rows to create:', rowsToCreate.length);
-    console.log('Updates to apply:', updatesToApply.length);
     
     // Create new rows if needed (create them first before updating existing rows)
     if (rowsToCreate.length > 0 && onSaveAsset && library) {
@@ -2448,7 +2379,7 @@ export function LibraryAssetsTable({
             propertyValues: { ...rowData.propertyValues },
           };
 
-          // Optimistically add the asset to Yjs immediately (解决行混乱问题)
+          // Optimistically add the asset to Yjs immediately (resolve row ordering issues)
           yRows.insert(yRows.length, [optimisticAsset]);
           
           // Also add to optimisticNewAssets for compatibility
@@ -2513,13 +2444,13 @@ export function LibraryAssetsTable({
           }
         });
         
-        // Apply updates - 先更新 Yjs，再更新数据库
-        // 获取当前 Yjs 数组的快照（在更新前）
+        // Apply updates - update Yjs first, then update database
+        // Get snapshot of current Yjs array (before update)
         const allRows = yRows.toArray();
         const rowIndexMap = new Map<string, number>();
         allRows.forEach((r, idx) => rowIndexMap.set(r.id, idx));
         
-        // 先批量更新 Yjs（倒序更新，避免索引变化）
+        // Batch update Yjs first (reverse order update to avoid index changes)
         const rowsToUpdate: Array<{ rowId: string; index: number; row: AssetRow }> = [];
         for (const [rowId, propertyValues] of updatesByRow.entries()) {
           const row = allRowsForSelection.find(r => r.id === rowId);
@@ -2538,14 +2469,14 @@ export function LibraryAssetsTable({
           }
         }
         
-        // 倒序更新 Yjs（从后往前，避免索引变化影响）
+        // Update Yjs in reverse order (from back to front, avoid index change impact)
         rowsToUpdate.sort((a, b) => b.index - a.index);
         rowsToUpdate.forEach(({ index, row }) => {
           yRows.delete(index, 1);
           yRows.insert(index, [row]);
         });
         
-        // 然后异步更新数据库
+        // Then asynchronously update database
         for (const [rowId, propertyValues] of updatesByRow.entries()) {
           const row = allRowsForSelection.find(r => r.id === rowId);
           if (row) {
@@ -2568,8 +2499,6 @@ export function LibraryAssetsTable({
     
     // If this was a cut operation, clear the cut cells
     if (isCutOperation && cutCells.size > 0 && onUpdateAsset) {
-      console.log('Clearing cut cells after paste');
-      
       // Clear cut state immediately (before clearing cell contents) to remove visual feedback
       const cutCellsToClear = new Set(cutCells);
       setCutCells(new Set());
@@ -2626,7 +2555,7 @@ export function LibraryAssetsTable({
         }
       });
       
-      // Apply clearing updates - 先更新 Yjs，再更新数据库
+      // Apply clearing updates - update Yjs first, then update database
       setIsSaving(true);
       try {
         const allRows = yRows.toArray();
@@ -2636,7 +2565,7 @@ export function LibraryAssetsTable({
             // Use the updated assetName if name field was cleared, otherwise use original name
             const assetName = rowData.assetName !== null ? rowData.assetName : (row.name || 'Untitled');
             
-            // 立即更新 Yjs (乐观更新)
+            // Immediately update Yjs (optimistic update)
             const rowIndex = allRows.findIndex(r => r.id === rowId);
             if (rowIndex >= 0) {
               const updatedRow = {
@@ -2645,12 +2574,12 @@ export function LibraryAssetsTable({
                 propertyValues: rowData.propertyValues
               };
               
-              // 更新 Yjs
+              // Update Yjs
               yRows.delete(rowIndex, 1);
               yRows.insert(rowIndex, [updatedRow]);
             }
             
-            // 异步更新数据库
+            // Asynchronously update database
             await onUpdateAsset(rowId, assetName, rowData.propertyValues);
           }
         }
@@ -2678,17 +2607,12 @@ export function LibraryAssetsTable({
     // Close menu
     setBatchEditMenuVisible(false);
     setBatchEditMenuPosition(null);
-    
-    console.log('handlePaste completed successfully');
   }, [clipboardData, selectedCells, selectedRowIds, getAllRowsForCellSelection, orderedProperties, isCutOperation, cutCells, onSaveAsset, onUpdateAsset, library]);
 
   // Handle Insert Row Above operation
   const handleInsertRowAbove = useCallback(async () => {
-    console.log('handleInsertRowAbove called, selectedCells:', selectedCells);
-    console.log('selectedRowIds:', selectedRowIds);
     
     if (!onSaveAsset || !library) {
-      console.log('onSaveAsset or library not available');
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
       setContextMenuRowId(null);
@@ -2720,7 +2644,6 @@ export function LibraryAssetsTable({
       // Use contextMenuRowId if available (from right-click menu)
       rowsToUse = new Set([contextMenuRowIdRef.current]);
     } else {
-      console.log('No cells or rows selected');
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
       setContextMenuRowId(null);
@@ -2729,7 +2652,6 @@ export function LibraryAssetsTable({
     }
 
     if (rowsToUse.size === 0) {
-      console.log('No valid rows found');
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
       setContextMenuRowId(null);
@@ -2738,7 +2660,7 @@ export function LibraryAssetsTable({
     }
 
     // Sort row IDs by their index in Yjs array (not allRowsForSelection, to ensure consistency)
-    // 使用 Yjs 数组来排序，确保与插入操作使用同一个数据源
+    // Use Yjs array for sorting to ensure using the same data source as insert operation
     const allRows = yRows.toArray();
     const sortedRowIds = Array.from(rowsToUse).sort((a, b) => {
       const indexA = allRows.findIndex(r => r.id === a);
@@ -2746,8 +2668,6 @@ export function LibraryAssetsTable({
       return indexA - indexB;
     });
 
-    console.log('Selected rows (sorted):', sortedRowIds.length, 'rows');
-    console.log('Row IDs:', sortedRowIds);
 
     // Insert n rows above the first selected row (where n = number of selected rows)
     // All n rows should be inserted consecutively above the first selected row
@@ -2878,11 +2798,10 @@ export function LibraryAssetsTable({
 
   // Handle Insert Row Below operation
   const handleInsertRowBelow = useCallback(async () => {
-    console.log('handleInsertRowBelow called, selectedCells:', selectedCells);
-    console.log('selectedRowIds:', selectedRowIds);
+    // console.log('handleInsertRowBelow called, selectedCells:', selectedCells);
+    // console.log('selectedRowIds:', selectedRowIds);
     
     if (!onSaveAsset || !library) {
-      console.log('onSaveAsset or library not available');
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
       setContextMenuRowId(null);
@@ -2914,7 +2833,6 @@ export function LibraryAssetsTable({
       // Use contextMenuRowId if available (from right-click menu)
       rowsToUse = new Set([contextMenuRowIdRef.current]);
     } else {
-      console.log('No cells or rows selected');
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
       setContextMenuRowId(null);
@@ -2923,7 +2841,6 @@ export function LibraryAssetsTable({
     }
 
     if (rowsToUse.size === 0) {
-      console.log('No valid rows found');
       setBatchEditMenuVisible(false);
       setBatchEditMenuPosition(null);
       setContextMenuRowId(null);
@@ -2932,7 +2849,7 @@ export function LibraryAssetsTable({
     }
 
     // Sort row IDs by their index in Yjs array (not allRowsForSelection, to ensure consistency)
-    // 使用 Yjs 数组来排序，确保与插入操作使用同一个数据源
+    // Use Yjs array for sorting to ensure using the same data source as insert operation
     const allRows = yRows.toArray();
     const sortedRowIds = Array.from(rowsToUse).sort((a, b) => {
       const indexA = allRows.findIndex(r => r.id === a);
@@ -2940,8 +2857,6 @@ export function LibraryAssetsTable({
       return indexA - indexB;
     });
 
-    console.log('Selected rows (sorted):', sortedRowIds.length, 'rows');
-    console.log('Row IDs:', sortedRowIds);
 
     // Insert n rows below the last selected row (where n = number of selected rows)
     // All n rows should be inserted consecutively below the last selected row
@@ -3073,13 +2988,10 @@ export function LibraryAssetsTable({
 
   // Handle Clear Contents operation
   const handleClearContents = useCallback(async () => {
-    console.log('handleClearContents called, selectedCells:', selectedCells);
-    console.log('selectedRowIds:', selectedRowIds);
     
     // If rows are selected but cells are not, convert rows to cells
     let cellsToClear = selectedCells;
     if (selectedCells.size === 0 && selectedRowIds.size > 0) {
-      console.log('Converting selected rows to cells for clear operation');
       const allRowCellKeys: CellKey[] = [];
       selectedRowIds.forEach(selectedRowId => {
         orderedProperties.forEach(property => {
@@ -3091,13 +3003,11 @@ export function LibraryAssetsTable({
     }
     
     if (cellsToClear.size === 0) {
-      console.log('No cells selected');
       setClearContentsConfirmVisible(false);
       return;
     }
 
     if (!onUpdateAsset) {
-      console.log('onUpdateAsset not available');
       setClearContentsConfirmVisible(false);
       return;
     }
@@ -3159,7 +3069,6 @@ export function LibraryAssetsTable({
       }
     });
     
-    console.log('Clearing contents for', cellsByRow.size, 'rows');
     
     // Close modal immediately before starting clearing (better UX)
     setClearContentsConfirmVisible(false);
@@ -3234,8 +3143,6 @@ export function LibraryAssetsTable({
     // Use ref to get the latest selectedCells value
     const currentSelectedCells = selectedCellsRef.current;
     
-    console.log('handleDeleteRow called, selectedCells:', currentSelectedCells);
-    console.log('selectedRowIds:', selectedRowIds);
     
     // If rows are selected via checkbox but cells are not, use selectedRowIds directly
     let rowsToDelete: Set<string>;
@@ -3259,24 +3166,20 @@ export function LibraryAssetsTable({
       // Use selectedRowIds directly (from checkbox selection)
       rowsToDelete = new Set(selectedRowIds);
     } else {
-      console.log('No cells or rows selected');
       setDeleteRowConfirmVisible(false);
       return;
     }
 
     if (!onDeleteAsset) {
-      console.log('onDeleteAsset not available');
       setDeleteRowConfirmVisible(false);
       return;
     }
 
     if (rowsToDelete.size === 0) {
-      console.log('No valid rows to delete');
       setDeleteRowConfirmVisible(false);
       return;
     }
 
-    console.log('Deleting', rowsToDelete.size, 'rows:', Array.from(rowsToDelete));
 
     // Close modal immediately before starting deletion (better UX)
     setDeleteRowConfirmVisible(false);
@@ -3295,7 +3198,6 @@ export function LibraryAssetsTable({
           // If asset is not found, consider it as successfully deleted (already deleted)
           // This can happen due to concurrent deletions or database sync delays
           if (error?.name === 'AuthorizationError' && error?.message === 'Asset not found') {
-            console.log(`Asset ${rowId} not found, considering as already deleted`);
             // Continue with next asset, don't revert optimistic update
             continue;
           }
@@ -3487,12 +3389,12 @@ export function LibraryAssetsTable({
         <tbody className={styles.body}>
           {(() => {
             // Combine real rows with optimistic new assets and apply optimistic edit updates
-            // 使用 Yjs 数据源 (allRowsSource)，保证所有操作都基于同一个数组
-            // 关键：使用 Map 去重，确保每个 row.id 只出现一次（解决 key 重复问题）
+            // Use Yjs data source (allRowsSource) to ensure all operations are based on the same array
+            // Key: use Map to deduplicate, ensure each row.id appears only once (resolve key duplication issue)
             
             const allRowsMap = new Map<string, AssetRow>();
             
-            // 从 allRowsSource 添加行（去重）
+            // Add rows from allRowsSource (deduplicate)
             allRowsSource
               .filter((row): row is AssetRow => !deletedAssetIds.has(row.id))
               .forEach((row) => {
@@ -3507,25 +3409,25 @@ export function LibraryAssetsTable({
                     propertyValues: { ...assetRow.propertyValues, ...optimisticUpdate.propertyValues }
                   });
                 } else {
-                  // 如果已存在，保留第一个（避免重复）
+                  // If already exists, keep the first one (avoid duplicates)
                   if (!allRowsMap.has(assetRow.id)) {
                     allRowsMap.set(assetRow.id, assetRow);
                   }
                 }
               });
             
-            // 添加 optimistic new assets（去重）
+            // Add optimistic new assets (deduplicate)
             optimisticNewAssets.forEach((asset, id) => {
               if (!allRowsMap.has(id)) {
                 allRowsMap.set(id, asset);
               }
             });
             
-            // 转换为数组，保持顺序（基于 allRowsSource 的顺序）
+            // Convert to array, maintain order (based on allRowsSource order)
             const allRows: AssetRow[] = [];
             const processedIds = new Set<string>();
             
-            // 先按 allRowsSource 的顺序添加
+            // First add in allRowsSource order
             allRowsSource.forEach(row => {
               if (!deletedAssetIds.has(row.id) && !processedIds.has(row.id)) {
                 const rowToAdd = allRowsMap.get(row.id);
@@ -3536,7 +3438,7 @@ export function LibraryAssetsTable({
               }
             });
             
-            // 再添加 optimistic new assets（不在 allRowsSource 中的）
+            // Then add optimistic new assets (not in allRowsSource)
             optimisticNewAssets.forEach((asset, id) => {
               if (!processedIds.has(id)) {
                 allRows.push(asset);
@@ -4690,9 +4592,6 @@ export function LibraryAssetsTable({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('Cut button clicked, selectedCells:', Array.from(selectedCells));
-            console.log('selectedRowIds:', Array.from(selectedRowIds));
-            console.log('Calling handleCut function');
             try {
               handleCut();
             } catch (error) {
