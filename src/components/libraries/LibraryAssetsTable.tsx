@@ -373,6 +373,10 @@ export function LibraryAssetsTable({
   const [dragCurrentCell, setDragCurrentCell] = useState<{ rowId: string; propertyKey: string } | null>(null);
   const isDraggingCellsRef = useRef(false);
   const dragCurrentCellRef = useRef<{ rowId: string; propertyKey: string } | null>(null);
+  
+  // Fill drag state (for Excel-like fill down functionality)
+  const [fillDragStartCell, setFillDragStartCell] = useState<{ rowId: string; propertyKey: string; startY: number } | null>(null);
+  const isFillingCellsRef = useRef(false);
 
   // Hover state for asset card
   const [hoveredAssetId, setHoveredAssetId] = useState<string | null>(null);
@@ -1433,6 +1437,11 @@ export function LibraryAssetsTable({
       return;
     }
     
+    // Don't select if we just completed a fill drag
+    if (isFillingCellsRef.current) {
+      return;
+    }
+    
     e.stopPropagation();
     
     // Select single cell
@@ -1440,6 +1449,220 @@ export function LibraryAssetsTable({
     setSelectedCells(new Set<CellKey>([cellKey]));
     setDragStartCell({ rowId, propertyKey });
     setDragCurrentCell(null);
+  };
+
+  // Handle cell fill drag start (Excel-like fill down functionality)
+  const handleCellFillDragStart = (rowId: string, propertyKey: string, e: React.MouseEvent) => {
+    // Don't start fill drag if clicking on interactive elements or expand icon
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || 
+        target.closest('.ant-checkbox') || 
+        target.closest('.ant-select') ||
+        target.closest('.ant-switch') ||
+        target.closest('input') ||
+        target.closest('select') ||
+        target.closest('.cellExpandIcon')) {
+      return;
+    }
+
+    // Only allow fill drag when single cell is selected
+    const cellKey: CellKey = `${rowId}-${propertyKey}` as CellKey;
+    if (!selectedCells.has(cellKey) || selectedCells.size !== 1) {
+      return;
+    }
+
+    // Check if this property type supports fill (only string, int, float)
+    const property = orderedProperties.find(p => p.key === propertyKey);
+    if (!property || !['string', 'int', 'float'].includes(property.dataType)) {
+      return;
+    }
+
+    // Only handle if left mouse button
+    if (e.button !== 0) {
+      return;
+    }
+
+    // Capture values in closure
+    const startRowId = rowId;
+    const startPropertyKey = propertyKey;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let hasMoved = false;
+    let isClick = true;
+    const DRAG_THRESHOLD = 5; // Minimum pixel movement to consider it a drag
+    
+    // Don't prevent default immediately - only if we actually drag
+    // This allows normal click behavior to work
+    
+    // Create handlers for fill drag move and end
+    const fillDragMoveHandler = (moveEvent: MouseEvent) => {
+      // Check if mouse has moved enough to be considered a drag
+      const deltaX = Math.abs(moveEvent.clientX - startX);
+      const deltaY = Math.abs(moveEvent.clientY - startY);
+      if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
+        hasMoved = true;
+        isClick = false;
+        
+        // Only start fill drag if we've actually moved
+        if (!isFillingCellsRef.current) {
+          isFillingCellsRef.current = true;
+          setFillDragStartCell({ rowId: startRowId, propertyKey: startPropertyKey, startY });
+          // Now prevent text selection since we're dragging
+          document.body.style.userSelect = 'none';
+        }
+      }
+      
+      // Only show selection feedback if we've actually dragged
+      if (!hasMoved || !isFillingCellsRef.current) return;
+      
+      // Find the cell under the cursor
+      const elementBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      if (!elementBelow) return;
+      
+      const cellElement = elementBelow.closest('td');
+      if (!cellElement) return;
+      
+      // Get row and property info from data attributes
+      const rowElement = cellElement.closest('tr');
+      if (!rowElement || 
+          rowElement.classList.contains('headerRowTop') || 
+          rowElement.classList.contains('headerRowBottom') || 
+          rowElement.classList.contains('editRow') ||
+          rowElement.classList.contains('addRow')) {
+        return;
+      }
+      
+      const currentRowId = rowElement.getAttribute('data-row-id');
+      const currentPropertyKey = cellElement.getAttribute('data-property-key');
+      
+      // Only allow downward fill (same column)
+      if (currentRowId && currentPropertyKey && currentPropertyKey === startPropertyKey) {
+        const allRowsForSelection = getAllRowsForCellSelection();
+        const startRowIndex = allRowsForSelection.findIndex(r => r.id === startRowId);
+        const currentRowIndex = allRowsForSelection.findIndex(r => r.id === currentRowId);
+        
+        // Only select cells if dragging downward
+        if (currentRowIndex > startRowIndex) {
+          const cellsToSelect = new Set<CellKey>();
+          for (let r = startRowIndex; r <= currentRowIndex; r++) {
+            const row = allRowsForSelection[r];
+            cellsToSelect.add(`${row.id}-${startPropertyKey}`);
+          }
+          setSelectedCells(cellsToSelect);
+        } else if (currentRowIndex === startRowIndex) {
+          // If back to start, just select the start cell
+          setSelectedCells(new Set<CellKey>([`${startRowId}-${startPropertyKey}` as CellKey]));
+        }
+      }
+    };
+    
+    const fillDragEndHandler = async (endEvent: MouseEvent) => {
+      document.removeEventListener('mousemove', fillDragMoveHandler);
+      document.removeEventListener('mouseup', fillDragEndHandler);
+      
+      // If it was just a click, don't do anything
+      if (isClick || !hasMoved) {
+        if (isFillingCellsRef.current) {
+          isFillingCellsRef.current = false;
+          document.body.style.userSelect = '';
+          setFillDragStartCell(null);
+        }
+        return;
+      }
+      
+      if (!isFillingCellsRef.current) {
+        return;
+      }
+      
+      isFillingCellsRef.current = false;
+      document.body.style.userSelect = '';
+      
+      // Check if we dragged downward
+      const allRowsForSelection = getAllRowsForCellSelection();
+      const startRowIndex = allRowsForSelection.findIndex(r => r.id === startRowId);
+      
+      // Find the cell under the cursor at end
+      const elementBelow = document.elementFromPoint(endEvent.clientX, endEvent.clientY);
+      if (!elementBelow) {
+        setFillDragStartCell(null);
+        return;
+      }
+      
+      const cellElement = elementBelow.closest('td');
+      if (!cellElement) {
+        setFillDragStartCell(null);
+        return;
+      }
+      
+      const rowElement = cellElement.closest('tr');
+      if (!rowElement || 
+          rowElement.classList.contains('headerRowTop') || 
+          rowElement.classList.contains('headerRowBottom') || 
+          rowElement.classList.contains('editRow') ||
+          rowElement.classList.contains('addRow')) {
+        setFillDragStartCell(null);
+        return;
+      }
+      
+      const endRowId = rowElement.getAttribute('data-row-id');
+      const endPropertyKey = cellElement.getAttribute('data-property-key');
+      
+      if (!endRowId || !endPropertyKey || endPropertyKey !== startPropertyKey) {
+        setFillDragStartCell(null);
+        return;
+      }
+      
+      const endRowIndex = allRowsForSelection.findIndex(r => r.id === endRowId);
+      
+      // Only fill if dragged downward and at least one row down
+      if (endRowIndex > startRowIndex) {
+        // Get the source cell value
+        const sourceRow = allRowsForSelection[startRowIndex];
+        const sourceProperty = orderedProperties.find(p => p.key === startPropertyKey);
+        
+        if (!sourceRow || !sourceProperty || !onUpdateAsset) {
+          setFillDragStartCell(null);
+          return;
+        }
+        
+        const sourceValue = sourceRow.propertyValues[startPropertyKey];
+        
+        // Fill all cells from startRowIndex + 1 to endRowIndex
+        const updates: Array<Promise<void>> = [];
+        
+        for (let r = startRowIndex + 1; r <= endRowIndex; r++) {
+          const targetRow = allRowsForSelection[r];
+          if (!targetRow) continue;
+          
+          // Only update if the value is different
+          if (targetRow.propertyValues[startPropertyKey] !== sourceValue) {
+            const updatedPropertyValues = {
+              ...targetRow.propertyValues,
+              [startPropertyKey]: sourceValue
+            };
+            
+            updates.push(
+              onUpdateAsset(targetRow.id, targetRow.name, updatedPropertyValues)
+                .catch(error => {
+                  console.error(`Failed to fill cell ${targetRow.id}-${startPropertyKey}:`, error);
+                })
+            );
+          }
+        }
+        
+        // Wait for all updates to complete
+        await Promise.all(updates);
+      }
+      
+      setFillDragStartCell(null);
+    };
+    
+    // Add event listeners
+    document.addEventListener('mousemove', fillDragMoveHandler);
+    document.addEventListener('mouseup', fillDragEndHandler);
+    
+    // Note: We don't prevent default or set userSelect here
+    // Only do that when we detect actual dragging movement
   };
 
   // Handle cell drag selection start (from expand icon)
@@ -4108,6 +4331,7 @@ export function LibraryAssetsTable({
                       onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                       onClick={(e) => handleCellClick(row.id, property.key, e)}
                       onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
+                      onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
                     >
                       {isNameField ? (
                         // Name field: show text + view detail button
@@ -4125,7 +4349,7 @@ export function LibraryAssetsTable({
                               // Prevent double click from bubbling to cell
                               e.stopPropagation();
                             }}
-                            title="View asset details (Ctrl/Cmd+Click for new tab)"
+                            title="View asset details"
                           >
                             <Image
                               src={assetTableIcon}
