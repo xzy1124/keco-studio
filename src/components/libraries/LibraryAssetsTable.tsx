@@ -1230,6 +1230,81 @@ export function LibraryAssetsTable({
     setEditingCellValue(value);
   };
 
+  // Handle media file change for editing cell
+  const handleEditMediaFileChange = (propertyKey: string, value: MediaFileMetadata | null) => {
+    // For media files, we need to save immediately when changed
+    if (!editingCell || !onUpdateAsset) return;
+    
+    const { rowId } = editingCell;
+    const row = rows.find(r => r.id === rowId);
+    if (!row) return;
+    
+    // Update property values
+    const updatedPropertyValues = {
+      ...row.propertyValues,
+      [propertyKey]: value
+    };
+    
+    // Get asset name
+    const assetName = row.name || 'Untitled';
+    
+    // Immediately update Yjs (optimistic update)
+    const allRows = yRows.toArray();
+    const rowIndex = allRows.findIndex(r => r.id === rowId);
+    
+    if (rowIndex >= 0) {
+      const existingRow = allRows[rowIndex];
+      const updatedRow = {
+        ...existingRow,
+        name: String(assetName),
+        propertyValues: updatedPropertyValues as Record<string, string | number | boolean>
+      };
+      
+      // Update Yjs
+      yRows.delete(rowIndex, 1);
+      yRows.insert(rowIndex, [updatedRow]);
+    }
+
+    // Apply optimistic update
+    setOptimisticEditUpdates(prev => {
+      const newMap = new Map(prev);
+      newMap.set(rowId, {
+        name: String(assetName),
+        propertyValues: updatedPropertyValues as Record<string, string | number | boolean>
+      });
+      return newMap;
+    });
+
+    // Save immediately for media files
+    setIsSaving(true);
+    onUpdateAsset(rowId, assetName, updatedPropertyValues as Record<string, string | number | boolean>)
+      .then(() => {
+        setTimeout(() => {
+          setOptimisticEditUpdates(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(rowId);
+            return newMap;
+          });
+        }, 500);
+      })
+      .catch((error) => {
+        console.error('Failed to update media file:', error);
+        setOptimisticEditUpdates(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(rowId);
+          return newMap;
+        });
+      })
+      .finally(() => {
+        setIsSaving(false);
+        // Exit edit mode after saving
+        setEditingCell(null);
+        setEditingCellValue('');
+        editingCellRef.current = null;
+        isComposingRef.current = false;
+      });
+  };
+
   // Handle save edited cell
   const handleSaveEditedCell = useCallback(async () => {
     if (!editingCell || !onUpdateAsset) return;
@@ -1327,10 +1402,7 @@ export function LibraryAssetsTable({
       return;
     }
     
-    // Don't allow double-click editing for image and file types
-    if (property.dataType === 'image' || property.dataType === 'file') {
-      return;
-    }
+    // Image and file types will use MediaFileUpload component for editing
     
     // If already editing this cell, do nothing
     if (editingCell?.rowId === row.id && editingCell?.propertyKey === property.key) {
@@ -3863,6 +3935,9 @@ export function LibraryAssetsTable({
                     
                     // Check if this is an image or file type field
                   if (property.dataType === 'image' || property.dataType === 'file') {
+                    // Check if this cell is being edited
+                    const isCellEditing = editingCell?.rowId === row.id && editingCell?.propertyKey === property.key;
+                    
                     const value = row.propertyValues[property.key];
                     let mediaValue: MediaFileMetadata | null = null;
                     
@@ -3916,6 +3991,7 @@ export function LibraryAssetsTable({
                         key={property.id}
                         data-property-key={property.key}
                         className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
+                        onDoubleClick={(e) => handleCellDoubleClick(row, property, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                         onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
@@ -3944,55 +4020,67 @@ export function LibraryAssetsTable({
                           }
                         }}
                       >
-                        {mediaValue ? (
-                          <div className={styles.mediaCellContent}>
-                            {isImageFile(mediaValue.fileType) ? (
-                              <div className={styles.mediaThumbnail}>
-                                <Image
-                                  src={mediaValue.url}
-                                  alt={mediaValue.fileName}
-                                  width={32}
-                                  height={32}
-                                  className={styles.mediaThumbnailImage}
-                                  unoptimized
-                                  onError={(e) => {
-                                    // Fallback to icon if image fails to load
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = 'none';
-                                    const parent = target.parentElement;
-                                    if (parent) {
-                                      const icon = document.createElement('span');
-                                      icon.className = styles.mediaFileIcon;
-                                      icon.textContent = getFileIcon(mediaValue!.fileType);
-                                      parent.appendChild(icon);
-                                    }
-                                  }}
-                                />
+                        {isCellEditing ? (
+                          // Cell is being edited: show MediaFileUpload component
+                          <MediaFileUpload
+                            value={mediaValue || null}
+                            onChange={(value) => handleEditMediaFileChange(property.key, value)}
+                            disabled={isSaving}
+                            fieldType={property.dataType}
+                          />
+                        ) : (
+                          <>
+                            {mediaValue ? (
+                              <div className={styles.mediaCellContent}>
+                                {isImageFile(mediaValue.fileType) ? (
+                                  <div className={styles.mediaThumbnail}>
+                                    <Image
+                                      src={mediaValue.url}
+                                      alt={mediaValue.fileName}
+                                      width={32}
+                                      height={32}
+                                      className={styles.mediaThumbnailImage}
+                                      unoptimized
+                                      onError={(e) => {
+                                        // Fallback to icon if image fails to load
+                                        const target = e.target as HTMLImageElement;
+                                        target.style.display = 'none';
+                                        const parent = target.parentElement;
+                                        if (parent) {
+                                          const icon = document.createElement('span');
+                                          icon.className = styles.mediaFileIcon;
+                                          icon.textContent = getFileIcon(mediaValue!.fileType);
+                                          parent.appendChild(icon);
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className={styles.mediaFileIcon}>{getFileIcon(mediaValue.fileType)}</span>
+                                )}
+                                <span className={styles.mediaFileName} title={mediaValue.fileName}>
+                                  {mediaValue.fileName}
+                                </span>
                               </div>
                             ) : (
-                              <span className={styles.mediaFileIcon}>{getFileIcon(mediaValue.fileType)}</span>
+                              // Show blank instead of dash for empty media fields
+                              <span></span>
                             )}
-                            <span className={styles.mediaFileName} title={mediaValue.fileName}>
-                              {mediaValue.fileName}
-                            </span>
-                          </div>
-                        ) : (
-                          // Show blank instead of dash for empty media fields
-                          <span></span>
-                        )}
-                        {shouldShowExpandIcon && (
-                          <div
-                            className={styles.cellExpandIcon}
-                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
-                          >
-                            <Image
-                              src={batchEditAddIcon}
-                              alt="Expand selection"
-                              width={18}
-                              height={18}
-                              style={{ pointerEvents: 'none' }}
-                            />
-                          </div>
+                            {shouldShowExpandIcon && (
+                              <div
+                                className={styles.cellExpandIcon}
+                                onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                              >
+                                <Image
+                                  src={batchEditAddIcon}
+                                  alt="Expand selection"
+                                  width={18}
+                                  height={18}
+                                  style={{ pointerEvents: 'none' }}
+                                />
+                              </div>
+                            )}
+                          </>
                         )}
                       </td>
                     );
