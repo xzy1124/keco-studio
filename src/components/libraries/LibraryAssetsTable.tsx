@@ -83,8 +83,8 @@ export function LibraryAssetsTable({
           return;
         }
         
-        // If this row is being edited, don't update it (avoid overwriting user edits)
-        if (editingRowId === yjsRow.id) {
+        // If this cell is being edited, don't update it (avoid overwriting user edits)
+        if (editingCell?.rowId === yjsRow.id) {
           return;
         }
         
@@ -163,9 +163,11 @@ export function LibraryAssetsTable({
   const [newRowData, setNewRowData] = useState<Record<string, any>>({});
   const [isSaving, setIsSaving] = useState(false);
   
-  // Edit mode state: track which row is being edited and its data
-  const [editingRowId, setEditingRowId] = useState<string | null>(null);
-  const [editingRowData, setEditingRowData] = useState<Record<string, any>>({});
+  // Edit mode state: track which cell is being edited (rowId and propertyKey)
+  const [editingCell, setEditingCell] = useState<{ rowId: string; propertyKey: string } | null>(null);
+  const [editingCellValue, setEditingCellValue] = useState<string>('');
+  const editingCellRef = useRef<HTMLSpanElement | null>(null);
+  const isComposingRef = useRef(false);
   
   // Optimistic update state for boolean fields: track pending boolean updates
   // Format: { rowId-propertyKey: booleanValue }
@@ -495,17 +497,7 @@ export function LibraryAssetsTable({
         });
       });
       
-      // From editing data
-      if (editingRowId) {
-        properties.forEach(prop => {
-          if (prop.dataType === 'reference') {
-            const value = editingRowData[prop.key];
-            if (value && typeof value === 'string') {
-              assetIds.add(value);
-            }
-          }
-        });
-      }
+      // From editing cell (reference fields don't use cell editing, so skip)
       
       // From new row data
       if (isAddingRow) {
@@ -542,7 +534,7 @@ export function LibraryAssetsTable({
     };
     
     loadAssetNames();
-  }, [rows, editingRowData, newRowData, properties, editingRowId, isAddingRow, supabase]);
+  }, [rows, newRowData, properties, editingCell, isAddingRow, supabase]);
 
   // Listen for asset updates to refresh asset names cache and clear optimistic updates
   useEffect(() => {
@@ -713,9 +705,6 @@ export function LibraryAssetsTable({
     if (referenceModalRowId === 'new') {
       // For new row, update newRowData
       handleInputChange(referenceModalProperty.key, assetId);
-    } else if (editingRowId === referenceModalRowId) {
-      // For row being edited, update editingRowData
-      handleEditInputChange(referenceModalProperty.key, assetId);
     } else {
       // For existing row not in edit mode, update the asset directly
       // Use allRowsSource (Yjs data source) instead of rows
@@ -1148,65 +1137,83 @@ export function LibraryAssetsTable({
           }
         }
         
-        // Handle editing row auto-save
-        if (editingRowId) {
-          const row = rows.find(r => r.id === editingRowId);
-          if (row && onUpdateAsset) {
-            // Get asset name from first property (use properties array directly)
-            const assetName = editingRowData[properties[0]?.key] || row.name || 'Untitled';
+        // Handle editing cell auto-save
+        if (editingCell && onUpdateAsset) {
+          const { rowId, propertyKey } = editingCell;
+          const row = rows.find(r => r.id === rowId);
+          if (row) {
+            const property = properties.find(p => p.key === propertyKey);
+            const isNameField = property && properties[0]?.key === propertyKey;
+            const updatedPropertyValues = {
+              ...row.propertyValues,
+              [propertyKey]: editingCellValue
+            };
+            const assetName = isNameField ? editingCellValue : (row.name || 'Untitled');
             
-            // Apply optimistic update immediately
+            // Immediately update Yjs
+            const allRows = yRows.toArray();
+            const rowIndex = allRows.findIndex(r => r.id === rowId);
+            if (rowIndex >= 0) {
+              const existingRow = allRows[rowIndex];
+              const updatedRow = {
+                ...existingRow,
+                name: String(assetName),
+                propertyValues: updatedPropertyValues
+              };
+              yRows.delete(rowIndex, 1);
+              yRows.insert(rowIndex, [updatedRow]);
+            }
+            
+            // Apply optimistic update
             setOptimisticEditUpdates(prev => {
               const newMap = new Map(prev);
-              newMap.set(editingRowId, {
+              newMap.set(rowId, {
                 name: String(assetName),
-                propertyValues: { ...editingRowData }
+                propertyValues: updatedPropertyValues
               });
               return newMap;
             });
             
-            // Reset editing state immediately for better UX
-            setEditingRowId(null);
-            const savedEditingRowData = { ...editingRowData };
-            setEditingRowData({});
+            const savedValue = editingCellValue;
+            setEditingCell(null);
+            setEditingCellValue('');
             
             setIsSaving(true);
-            try {
-              await onUpdateAsset(editingRowId, String(assetName), savedEditingRowData);
-              // Remove optimistic update after a short delay to allow parent to refresh
-              setTimeout(() => {
+            onUpdateAsset(rowId, assetName, updatedPropertyValues)
+              .then(() => {
+                setTimeout(() => {
+                  setOptimisticEditUpdates(prev => {
+                    const newMap = new Map(prev);
+                    newMap.delete(rowId);
+                    return newMap;
+                  });
+                }, 500);
+              })
+              .catch((error) => {
+                console.error('Failed to update cell:', error);
                 setOptimisticEditUpdates(prev => {
                   const newMap = new Map(prev);
-                  newMap.delete(editingRowId);
+                  newMap.delete(rowId);
                   return newMap;
                 });
-              }, 500);
-            } catch (error) {
-              console.error('Failed to update asset:', error);
-              // On error, revert optimistic update
-              setOptimisticEditUpdates(prev => {
-                const newMap = new Map(prev);
-                newMap.delete(editingRowId);
-                return newMap;
+                setEditingCell({ rowId, propertyKey });
+                setEditingCellValue(savedValue);
+              })
+              .finally(() => {
+                setIsSaving(false);
               });
-              // Restore editing state so user can try again
-              setEditingRowId(editingRowId);
-              setEditingRowData(savedEditingRowData);
-            } finally {
-              setIsSaving(false);
-            }
           }
         }
       }
     };
 
-    if (isAddingRow || editingRowId) {
+    if (isAddingRow || editingCell) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }
-  }, [isAddingRow, editingRowId, isSaving, newRowData, editingRowData, onSaveAsset, onUpdateAsset, properties, rows, referenceModalOpen]);
+  }, [isAddingRow, editingCell, editingCellValue, isSaving, newRowData, onSaveAsset, onUpdateAsset, properties, rows, referenceModalOpen, yRows, setOptimisticEditUpdates]);
 
   // Handle input change for new row
   const handleInputChange = (propertyId: string, value: any) => {
@@ -1218,58 +1225,42 @@ export function LibraryAssetsTable({
     setNewRowData((prev) => ({ ...prev, [propertyId]: value }));
   };
 
-  // Handle input change for editing row
-  const handleEditInputChange = (propertyId: string, value: any) => {
-    setEditingRowData((prev) => ({ ...prev, [propertyId]: value }));
+  // Handle input change for editing cell
+  const handleEditCellValueChange = (value: string) => {
+    setEditingCellValue(value);
   };
 
-  // Handle media file change for editing row
-  const handleEditMediaFileChange = (propertyId: string, value: MediaFileMetadata | null) => {
-    setEditingRowData((prev) => ({ ...prev, [propertyId]: value }));
-  };
-
-  // Handle double click on cell to start editing
-  const handleCellDoubleClick = (row: AssetRow, e: React.MouseEvent) => {
-    // Prevent editing if adding a new row
-    if (isAddingRow) {
-      return;
-    }
-    // If already editing this row, do nothing
-    if (editingRowId === row.id) {
-      return;
-    }
-    // Prevent event bubbling to avoid conflicts
-    e.stopPropagation();
-    // Start editing
-    handleEditRow(row);
-  };
-
-  // Handle edit row
-  const handleEditRow = (row: AssetRow) => {
-    // Prevent editing if adding a new row
-    if (isAddingRow) {
-      alert('Please finish adding the new asset first.');
-      return;
-    }
-    setEditingRowId(row.id);
-    // Initialize editing data with current values
-    setEditingRowData(row.propertyValues);
-  };
-
-  // Handle save edited row
-  const handleSaveEditedRow = async (assetId: string, assetName: string) => {
-    if (!onUpdateAsset) return;
-
-    // Immediately update Yjs (optimistic update, resolve save issues)
+  // Handle save edited cell
+  const handleSaveEditedCell = useCallback(async () => {
+    if (!editingCell || !onUpdateAsset) return;
+    
+    const { rowId, propertyKey } = editingCell;
+    const row = rows.find(r => r.id === rowId);
+    if (!row) return;
+    
+    // Get the property to determine if it's the name field (first property)
+    const property = properties.find(p => p.key === propertyKey);
+    const isNameField = property && properties[0]?.key === propertyKey;
+    
+    // Update property values
+    const updatedPropertyValues = {
+      ...row.propertyValues,
+      [propertyKey]: editingCellValue
+    };
+    
+    // Get asset name (use first property value or row name)
+    const assetName = isNameField ? editingCellValue : (row.name || 'Untitled');
+    
+    // Immediately update Yjs (optimistic update)
     const allRows = yRows.toArray();
-    const rowIndex = allRows.findIndex(r => r.id === assetId);
+    const rowIndex = allRows.findIndex(r => r.id === rowId);
     
     if (rowIndex >= 0) {
       const existingRow = allRows[rowIndex];
       const updatedRow = {
         ...existingRow,
         name: String(assetName),
-        propertyValues: { ...editingRowData }
+        propertyValues: updatedPropertyValues
       };
       
       // Update Yjs
@@ -1277,53 +1268,105 @@ export function LibraryAssetsTable({
       yRows.insert(rowIndex, [updatedRow]);
     }
 
-    // Apply optimistic update for compatibility
+    // Apply optimistic update
     setOptimisticEditUpdates(prev => {
       const newMap = new Map(prev);
-      newMap.set(assetId, {
+      newMap.set(rowId, {
         name: String(assetName),
-        propertyValues: { ...editingRowData }
+        propertyValues: updatedPropertyValues
       });
       return newMap;
     });
 
     // Reset editing state immediately for better UX
-    setEditingRowId(null);
-    const savedEditingRowData = { ...editingRowData };
-    setEditingRowData({});
+    const savedValue = editingCellValue;
+    setEditingCell(null);
+    setEditingCellValue('');
+    editingCellRef.current = null;
+    isComposingRef.current = false;
 
     setIsSaving(true);
     try {
-      await onUpdateAsset(assetId, assetName, savedEditingRowData);
+      await onUpdateAsset(rowId, assetName, updatedPropertyValues);
       // Remove optimistic update after a short delay to allow parent to refresh
       setTimeout(() => {
         setOptimisticEditUpdates(prev => {
           const newMap = new Map(prev);
-          newMap.delete(assetId);
+          newMap.delete(rowId);
           return newMap;
         });
       }, 500);
     } catch (error) {
-      console.error('Failed to update asset:', error);
+      console.error('Failed to update cell:', error);
       // On error, revert optimistic update
       setOptimisticEditUpdates(prev => {
         const newMap = new Map(prev);
-        newMap.delete(assetId);
+        newMap.delete(rowId);
         return newMap;
       });
       // Restore editing state so user can try again
-      setEditingRowId(assetId);
-      setEditingRowData(savedEditingRowData);
-      alert('Failed to update asset. Please try again.');
+      setEditingCell({ rowId, propertyKey });
+      setEditingCellValue(savedValue);
+      alert('Failed to update cell. Please try again.');
     } finally {
       setIsSaving(false);
     }
+  }, [editingCell, editingCellValue, onUpdateAsset, properties, rows, yRows, setOptimisticEditUpdates]);
+
+  // Handle double click on cell to start editing (only for editable cell types)
+  const handleCellDoubleClick = (row: AssetRow, property: PropertyConfig, e: React.MouseEvent) => {
+    // Prevent editing if adding a new row
+    if (isAddingRow) {
+      return;
+    }
+    
+    // Don't allow double-click editing for option, reference, and boolean types
+    if (property.dataType === 'enum' || 
+        (property.dataType === 'reference' && property.referenceLibraries) || 
+        property.dataType === 'boolean') {
+      return;
+    }
+    
+    // Don't allow double-click editing for image and file types
+    if (property.dataType === 'image' || property.dataType === 'file') {
+      return;
+    }
+    
+    // If already editing this cell, do nothing
+    if (editingCell?.rowId === row.id && editingCell?.propertyKey === property.key) {
+      return;
+    }
+    
+    // Prevent event bubbling to avoid conflicts
+    e.stopPropagation();
+    
+    // Start editing this cell
+    const currentValue = row.propertyValues[property.key];
+    const stringValue = currentValue !== null && currentValue !== undefined ? String(currentValue) : '';
+    setEditingCell({ rowId: row.id, propertyKey: property.key });
+    setEditingCellValue(stringValue);
+    isComposingRef.current = false;
+    
+    // Initialize the contentEditable element after state update
+    setTimeout(() => {
+      if (editingCellRef.current) {
+        editingCellRef.current.textContent = stringValue;
+        editingCellRef.current.focus();
+        const range = document.createRange();
+        range.selectNodeContents(editingCellRef.current);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+    }, 0);
   };
 
   // Handle cancel editing
   const handleCancelEditing = () => {
-    setEditingRowId(null);
-    setEditingRowData({});
+    setEditingCell(null);
+    setEditingCellValue('');
+    editingCellRef.current = null;
+    isComposingRef.current = false;
   };
 
   // Handle view asset detail - navigate to asset detail page
@@ -3681,150 +3724,6 @@ export function LibraryAssetsTable({
             return allRows;
           })()
             .map((row, index) => {
-            const isEditing = editingRowId === row.id;
-            
-            // If this row is being edited, show edit row
-            if (isEditing) {
-              return (
-                <tr
-                  key={row.id}
-                  className={styles.editRow}
-                  onMouseEnter={() => setHoveredRowId(row.id)}
-                  onMouseLeave={() => setHoveredRowId(null)}
-                >
-                  <td className={styles.numberCell}>{index + 1}</td>
-                  {orderedProperties.map((property) => {
-                    // Check if this is a reference type field
-                    if (property.dataType === 'reference' && property.referenceLibraries) {
-                      const assetId = editingRowData[property.key] ? String(editingRowData[property.key]) : null;
-                      
-                      return (
-                        <td key={property.id} className={styles.editCell}>
-                          <div className={styles.referenceInputContainer}>
-                            <ReferenceField
-                              property={property}
-                              assetId={assetId}
-                              rowId={row.id}
-                              assetNamesCache={assetNamesCache}
-                              onAvatarMouseEnter={handleAvatarMouseEnter}
-                              onAvatarMouseLeave={handleAvatarMouseLeave}
-                              onOpenReferenceModal={handleOpenReferenceModal}
-                            />
-                          </div>
-                        </td>
-                      );
-                    }
-                    
-                    // Check if this is an image or file type field
-                    if (property.dataType === 'image' || property.dataType === 'file') {
-                      const mediaValue = editingRowData[property.key] as MediaFileMetadata | null | undefined;
-                      return (
-                        <td key={property.id} className={styles.editCell}>
-                          <MediaFileUpload
-                            value={mediaValue || null}
-                            onChange={(value) => handleEditMediaFileChange(property.key, value)}
-                            disabled={isSaving}
-                            fieldType={property.dataType}
-                          />
-                        </td>
-                      );
-                    }
-                    
-                    // Check if this is a boolean type field
-                    if (property.dataType === 'boolean') {
-                      const boolValue = editingRowData[property.key];
-                      const checked = boolValue === true || boolValue === 'true' || String(boolValue).toLowerCase() === 'true';
-                      
-                      return (
-                        <td key={property.id} className={styles.editCell}>
-                          <div className={styles.booleanToggle}>
-                            <Switch
-                              checked={checked}
-                              onChange={(checked) => handleEditInputChange(property.key, checked)}
-                              disabled={isSaving}
-                            />
-                            <span className={styles.booleanLabel}>
-                              {checked ? 'True' : 'False'}
-                            </span>
-                          </div>
-                        </td>
-                      );
-                    }
-                    
-                    // Check if this is an enum/option type field
-                    if (property.dataType === 'enum' && property.enumOptions && property.enumOptions.length > 0) {
-                      const enumSelectKey = `edit-${editingRowId}-${property.key}`;
-                      const isOpen = openEnumSelects[enumSelectKey] || false;
-                      const value = editingRowData[property.key];
-                      const display = value !== null && value !== undefined && value !== '' ? String(value) : null;
-                      
-                      return (
-                        <td key={property.id} className={styles.editCell}>
-                          <div className={styles.enumSelectWrapper}>
-                            <Select
-                              value={display || undefined}
-                              placeholder="Select"
-                              open={isOpen}
-                              onOpenChange={(open) => {
-                                setOpenEnumSelects(prev => ({
-                                  ...prev,
-                                  [enumSelectKey]: open
-                                }));
-                              }}
-                              onChange={(newValue) => {
-                                handleEditInputChange(property.key, newValue);
-                                // Close dropdown
-                                setOpenEnumSelects(prev => ({
-                                  ...prev,
-                                  [enumSelectKey]: false
-                                }));
-                              }}
-                              className={styles.enumSelectDisplay}
-                              suffixIcon={null}
-                              disabled={isSaving}
-                              getPopupContainer={() => document.body}
-                            >
-                              {property.enumOptions.map((option) => (
-                                <Select.Option key={option} value={option} title="">
-                                  {option}
-                                </Select.Option>
-                              ))}
-                            </Select>
-                            <Image
-                              src={libraryAssetTableSelectIcon}
-                              alt=""
-                              width={16}
-                              height={16}
-                              className={styles.enumSelectIcon}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenEnumSelects(prev => ({
-                                  ...prev,
-                                  [enumSelectKey]: !prev[enumSelectKey]
-                                }));
-                              }}
-                            />
-                          </div>
-                        </td>
-                      );
-                    }
-                    
-                    return (
-                      <td key={property.id} className={styles.editCell}>
-                        <Input
-                          value={editingRowData[property.key] || ''}
-                          onChange={(e) => handleEditInputChange(property.key, e.target.value)}
-                          placeholder={`Enter ${property.name.toLowerCase()}`}
-                          className={styles.editInput}
-                          disabled={isSaving}
-                        />
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            }
-            
             // Normal display row
             const isRowHovered = hoveredRowId === row.id;
             const isRowSelected = selectedRowIds.has(row.id);
@@ -3907,7 +3806,6 @@ export function LibraryAssetsTable({
                           key={property.id}
                           data-property-key={property.key}
                           className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
-                          onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                           onClick={(e) => handleCellClick(row.id, property.key, e)}
                           onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                           onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
@@ -4018,7 +3916,6 @@ export function LibraryAssetsTable({
                         key={property.id}
                         data-property-key={property.key}
                         className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
-                        onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                         onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
@@ -4149,7 +4046,6 @@ export function LibraryAssetsTable({
                         key={property.id}
                         data-property-key={property.key}
                         className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
-                        onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                         onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
@@ -4287,7 +4183,6 @@ export function LibraryAssetsTable({
                         key={property.id}
                         data-property-key={property.key}
                         className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
-                        onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                         onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
@@ -4413,6 +4308,9 @@ export function LibraryAssetsTable({
                   }
                   
                   // Other fields: show text only
+                  // Check if this cell is being edited
+                  const isCellEditing = editingCell?.rowId === row.id && editingCell?.propertyKey === property.key;
+                  
                   // For name field, fallback to row.name if propertyValues doesn't have it
                   // But don't display "Untitled" for blank rows - show empty instead
                   let value = row.propertyValues[property.key];
@@ -4462,86 +4360,136 @@ export function LibraryAssetsTable({
                     hoveredCellForExpand?.propertyKey === property.key;
                   const shouldShowExpandIcon = showExpandIcon && isHoveredForExpand;
                   
-                  return (
-                    <td
-                      key={property.id}
-                      data-property-key={property.key}
-                      className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
-                      onDoubleClick={(e) => handleCellDoubleClick(row, e)}
-                      onClick={(e) => handleCellClick(row.id, property.key, e)}
-                      onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
-                      onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
-                      onMouseMove={(e) => {
-                        if (showExpandIcon) {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const x = e.clientX - rect.left;
-                          const y = e.clientY - rect.top;
-                          const width = rect.width;
-                          const height = rect.height;
-                          
-                          // Check if mouse is in bottom-right corner (last 20px from right and bottom)
-                          const CORNER_SIZE = 20;
-                          if (x >= width - CORNER_SIZE && y >= height - CORNER_SIZE) {
-                            setHoveredCellForExpand({ rowId: row.id, propertyKey: property.key });
-                          } else {
-                            if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
-                              setHoveredCellForExpand(null);
+                    return (
+                      <td
+                        key={property.id}
+                        data-property-key={property.key}
+                        className={`${styles.cell} ${isSingleSelected ? styles.cellSelected : ''} ${isMultipleSelected ? styles.cellMultipleSelected : ''} ${isCellCut ? styles.cellCut : ''} ${cutBorderClass} ${selectionBorderClass}`}
+                        onDoubleClick={(e) => handleCellDoubleClick(row, property, e)}
+                        onClick={(e) => handleCellClick(row.id, property.key, e)}
+                        onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
+                        onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
+                        onMouseMove={(e) => {
+                          if (showExpandIcon) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const y = e.clientY - rect.top;
+                            const width = rect.width;
+                            const height = rect.height;
+                            
+                            // Check if mouse is in bottom-right corner (last 20px from right and bottom)
+                            const CORNER_SIZE = 20;
+                            if (x >= width - CORNER_SIZE && y >= height - CORNER_SIZE) {
+                              setHoveredCellForExpand({ rowId: row.id, propertyKey: property.key });
+                            } else {
+                              if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                                setHoveredCellForExpand(null);
+                              }
                             }
                           }
-                        }
-                      }}
-                      onMouseLeave={() => {
-                        if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
-                          setHoveredCellForExpand(null);
-                        }
-                      }}
-                    >
-                      {isNameField ? (
-                        // Name field: show text + view detail button
-                        <div className={styles.cellContent}>
-                          <span className={styles.cellText}>
-                            {display || ''}
-                          </span>
-                          <button
-                            className={styles.viewDetailButton}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleViewAssetDetail(row, e);
-                            }}
-                            onDoubleClick={(e) => {
-                              // Prevent double click from bubbling to cell
-                              e.stopPropagation();
-                            }}
-                            title="View asset details"
-                          >
-                            <Image
-                              src={assetTableIcon}
-                              alt="View"
-                              width={20}
-                              height={20}
-                            />
-                          </button>
-                        </div>
+                        }}
+                        onMouseLeave={() => {
+                          if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                            setHoveredCellForExpand(null);
+                          }
+                        }}
+                      >
+                      {isCellEditing ? (
+                        // Cell is being edited: use contentEditable for direct cell editing
+                        <span
+                          ref={editingCellRef}
+                          contentEditable
+                          suppressContentEditableWarning
+                          onBlur={(e) => {
+                            if (!isComposingRef.current) {
+                              const newValue = e.currentTarget.textContent || '';
+                              setEditingCellValue(newValue);
+                              handleSaveEditedCell();
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !isComposingRef.current) {
+                              e.preventDefault();
+                              const newValue = e.currentTarget.textContent || '';
+                              setEditingCellValue(newValue);
+                              handleSaveEditedCell();
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              handleCancelEditing();
+                            }
+                          }}
+                          onInput={(e) => {
+                            // Only update state when not composing (for IME input)
+                            if (!isComposingRef.current) {
+                              const newValue = e.currentTarget.textContent || '';
+                              setEditingCellValue(newValue);
+                            }
+                          }}
+                          onCompositionStart={() => {
+                            isComposingRef.current = true;
+                          }}
+                          onCompositionEnd={(e) => {
+                            isComposingRef.current = false;
+                            const newValue = e.currentTarget.textContent || '';
+                            setEditingCellValue(newValue);
+                          }}
+                          style={{
+                            outline: 'none',
+                            minHeight: '1em',
+                            display: 'block',
+                            width: '100%'
+                          }}
+                        />
                       ) : (
-                        // Other fields: show text with ellipsis for long content
-                        // Show blank (empty string) instead of placeholder dash for empty values
-                        <span className={styles.cellText} title={display || ''}>
-                          {display || ''}
-                        </span>
-                        )}
-                      {shouldShowExpandIcon && (
-                        <div
-                          className={styles.cellExpandIcon}
-                          onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
-                        >
-                          <Image
-                            src={batchEditAddIcon}
-                            alt="Expand selection"
-                            width={18}
-                            height={18}
-                            style={{ pointerEvents: 'none' }}
-                          />
-                        </div>
+                        <>
+                          {isNameField ? (
+                            // Name field: show text + view detail button
+                            <div className={styles.cellContent}>
+                              <span className={styles.cellText}>
+                                {display || ''}
+                              </span>
+                              <button
+                                className={styles.viewDetailButton}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewAssetDetail(row, e);
+                                }}
+                                onDoubleClick={(e) => {
+                                  // Prevent double click from bubbling to cell
+                                  e.stopPropagation();
+                                }}
+                                title="View asset details"
+                              >
+                                <Image
+                                  src={assetTableIcon}
+                                  alt="View"
+                                  width={20}
+                                  height={20}
+                                />
+                              </button>
+                            </div>
+                          ) : (
+                            // Other fields: show text with ellipsis for long content
+                            // Show blank (empty string) instead of placeholder dash for empty values
+                            <span className={styles.cellText} title={display || ''}>
+                              {display || ''}
+                            </span>
+                          )}
+                          {shouldShowExpandIcon && (
+                            <div
+                              className={styles.cellExpandIcon}
+                              onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                            >
+                              <Image
+                                src={batchEditAddIcon}
+                                alt="Expand selection"
+                                width={18}
+                                height={18}
+                                style={{ pointerEvents: 'none' }}
+                              />
+                            </div>
+                          )}
+                        </>
                       )}
                     </td>
                   );
@@ -4688,14 +4636,14 @@ export function LibraryAssetsTable({
                 <button
                   className={styles.addButton}
                   onClick={() => {
-                    // Prevent adding if editing a row
-                    if (editingRowId) {
-                      alert('Please finish editing the current asset first.');
+                    // Prevent adding if editing a cell
+                    if (editingCell) {
+                      alert('Please finish editing the current cell first.');
                       return;
                     }
                     setIsAddingRow(true);
                   }}
-                  disabled={editingRowId !== null}
+                  disabled={editingCell !== null}
                 >
                   <Image
                     src={libraryAssetTableAddIcon}
