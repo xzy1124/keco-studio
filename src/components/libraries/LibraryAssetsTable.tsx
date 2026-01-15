@@ -1451,9 +1451,9 @@ export function LibraryAssetsTable({
     setDragCurrentCell(null);
   };
 
-  // Handle cell fill drag start (Excel-like fill down functionality)
+  // Handle cell drag selection start (from cell itself - for multi-selection)
   const handleCellFillDragStart = (rowId: string, propertyKey: string, e: React.MouseEvent) => {
-    // Don't start fill drag if clicking on interactive elements or expand icon
+    // Don't start drag if clicking on interactive elements or expand icon
     const target = e.target as HTMLElement;
     if (target.closest('button') || 
         target.closest('.ant-checkbox') || 
@@ -1465,6 +1465,131 @@ export function LibraryAssetsTable({
       return;
     }
 
+    // Only allow drag when single cell is selected
+    const cellKey: CellKey = `${rowId}-${propertyKey}` as CellKey;
+    if (!selectedCells.has(cellKey) || selectedCells.size !== 1) {
+      return;
+    }
+
+    // Only handle if left mouse button
+    if (e.button !== 0) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    
+    isDraggingCellsRef.current = true;
+    const startCell = { rowId, propertyKey };
+    setDragStartCell(startCell);
+    setDragCurrentCell(startCell);
+    dragCurrentCellRef.current = startCell;
+    
+    // Create handlers for drag move and end
+    const dragMoveHandler = (moveEvent: MouseEvent) => {
+      if (!isDraggingCellsRef.current) return;
+      
+      // Use the captured values from closure
+      const startRowId = rowId;
+      const startPropertyKey = propertyKey;
+      
+      // Find the cell under the cursor
+      const elementBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      if (!elementBelow) return;
+      
+      const cellElement = elementBelow.closest('td');
+      if (!cellElement) return;
+      
+      // Get row and property info from data attributes
+      const rowElement = cellElement.closest('tr');
+      if (!rowElement || 
+          rowElement.classList.contains('headerRowTop') || 
+          rowElement.classList.contains('headerRowBottom') || 
+          rowElement.classList.contains('editRow') ||
+          rowElement.classList.contains('addRow')) {
+        return;
+      }
+      
+      const currentRowId = rowElement.getAttribute('data-row-id');
+      const currentPropertyKey = cellElement.getAttribute('data-property-key');
+      
+      if (currentRowId && currentPropertyKey) {
+        const newCell = { rowId: currentRowId, propertyKey: currentPropertyKey };
+        dragCurrentCellRef.current = newCell;
+        setDragCurrentCell(newCell);
+      }
+    };
+    
+    const dragEndHandler = (endEvent: MouseEvent) => {
+      if (!isDraggingCellsRef.current) {
+        return;
+      }
+      
+      isDraggingCellsRef.current = false;
+      document.removeEventListener('mousemove', dragMoveHandler);
+      document.removeEventListener('mouseup', dragEndHandler);
+      document.body.style.userSelect = '';
+      
+      // Get all rows and properties for selection
+      const allRowsForSelection = getAllRowsForCellSelection();
+      // Use captured values from closure
+      const startRowId = rowId;
+      const startPropertyKey = propertyKey;
+      // Get current end from ref (updated by dragMoveHandler)
+      const endCell = dragCurrentCellRef.current || { rowId: startRowId, propertyKey: startPropertyKey };
+      const endRowId = endCell.rowId;
+      const endPropertyKey = endCell.propertyKey;
+      
+      // Find start and end indices
+      const startRowIndex = allRowsForSelection.findIndex(r => r.id === startRowId);
+      const endRowIndex = allRowsForSelection.findIndex(r => r.id === endRowId);
+      
+      // Find property indices in orderedProperties
+      const startPropertyIndex = orderedProperties.findIndex(p => p.key === startPropertyKey);
+      const endPropertyIndex = orderedProperties.findIndex(p => p.key === endPropertyKey);
+      
+      if (startRowIndex !== -1 && endRowIndex !== -1 && 
+          startPropertyIndex !== -1 && endPropertyIndex !== -1) {
+        // Select all cells in the rectangle
+        const rowStart = Math.min(startRowIndex, endRowIndex);
+        const rowEnd = Math.max(startRowIndex, endRowIndex);
+        const propStart = Math.min(startPropertyIndex, endPropertyIndex);
+        const propEnd = Math.max(startPropertyIndex, endPropertyIndex);
+        
+        const cellsToSelect = new Set<CellKey>();
+        
+        for (let r = rowStart; r <= rowEnd; r++) {
+          const row = allRowsForSelection[r];
+          for (let p = propStart; p <= propEnd; p++) {
+            const property = orderedProperties[p];
+            cellsToSelect.add(`${row.id}-${property.key}`);
+          }
+        }
+        
+        setSelectedCells(cellsToSelect);
+      } else {
+        // Fallback: just select the start cell
+        setSelectedCells(new Set<CellKey>([`${startRowId}-${startPropertyKey}` as CellKey]));
+      }
+      
+      setDragStartCell(null);
+      setDragCurrentCell(null);
+      dragCurrentCellRef.current = null;
+    };
+    
+    // Add event listeners
+    document.addEventListener('mousemove', dragMoveHandler);
+    document.addEventListener('mouseup', dragEndHandler);
+    
+    // Prevent text selection during drag
+    document.body.style.userSelect = 'none';
+  };
+
+  // Handle cell fill drag start (from expand icon - Excel-like fill down functionality)
+  const handleCellDragStart = (rowId: string, propertyKey: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     // Only allow fill drag when single cell is selected
     const cellKey: CellKey = `${rowId}-${propertyKey}` as CellKey;
     if (!selectedCells.has(cellKey) || selectedCells.size !== 1) {
@@ -1477,11 +1602,6 @@ export function LibraryAssetsTable({
       return;
     }
 
-    // Only handle if left mouse button
-    if (e.button !== 0) {
-      return;
-    }
-
     // Capture values in closure
     const startRowId = rowId;
     const startPropertyKey = propertyKey;
@@ -1490,9 +1610,6 @@ export function LibraryAssetsTable({
     let hasMoved = false;
     let isClick = true;
     const DRAG_THRESHOLD = 5; // Minimum pixel movement to consider it a drag
-    
-    // Don't prevent default immediately - only if we actually drag
-    // This allows normal click behavior to work
     
     // Create handlers for fill drag move and end
     const fillDragMoveHandler = (moveEvent: MouseEvent) => {
@@ -1663,117 +1780,6 @@ export function LibraryAssetsTable({
     
     // Note: We don't prevent default or set userSelect here
     // Only do that when we detect actual dragging movement
-  };
-
-  // Handle cell drag selection start (from expand icon)
-  const handleCellDragStart = (rowId: string, propertyKey: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    isDraggingCellsRef.current = true;
-    const startCell = { rowId, propertyKey };
-    setDragStartCell(startCell);
-    setDragCurrentCell(startCell);
-    dragCurrentCellRef.current = startCell;
-    
-    // Create handlers for drag move and end
-    const dragMoveHandler = (moveEvent: MouseEvent) => {
-      if (!isDraggingCellsRef.current) return;
-      
-      // Use the captured values from closure
-      const startRowId = rowId;
-      const startPropertyKey = propertyKey;
-      
-      // Find the cell under the cursor
-      const elementBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
-      if (!elementBelow) return;
-      
-      const cellElement = elementBelow.closest('td');
-      if (!cellElement) return;
-      
-      // Get row and property info from data attributes
-      const rowElement = cellElement.closest('tr');
-      if (!rowElement || 
-          rowElement.classList.contains('headerRowTop') || 
-          rowElement.classList.contains('headerRowBottom') || 
-          rowElement.classList.contains('editRow') ||
-          rowElement.classList.contains('addRow')) {
-        return;
-      }
-      
-      const currentRowId = rowElement.getAttribute('data-row-id');
-      const currentPropertyKey = cellElement.getAttribute('data-property-key');
-      
-      if (currentRowId && currentPropertyKey) {
-        const newCell = { rowId: currentRowId, propertyKey: currentPropertyKey };
-        dragCurrentCellRef.current = newCell;
-        setDragCurrentCell(newCell);
-      }
-    };
-    
-    const dragEndHandler = (endEvent: MouseEvent) => {
-      if (!isDraggingCellsRef.current) {
-        return;
-      }
-      
-      isDraggingCellsRef.current = false;
-      document.removeEventListener('mousemove', dragMoveHandler);
-      document.removeEventListener('mouseup', dragEndHandler);
-      document.body.style.userSelect = '';
-      
-      // Get all rows and properties for selection
-      const allRowsForSelection = getAllRowsForCellSelection();
-      // Use captured values from closure
-      const startRowId = rowId;
-      const startPropertyKey = propertyKey;
-      // Get current end from ref (updated by dragMoveHandler)
-      const endCell = dragCurrentCellRef.current || { rowId: startRowId, propertyKey: startPropertyKey };
-      const endRowId = endCell.rowId;
-      const endPropertyKey = endCell.propertyKey;
-      
-      // Find start and end indices
-      const startRowIndex = allRowsForSelection.findIndex(r => r.id === startRowId);
-      const endRowIndex = allRowsForSelection.findIndex(r => r.id === endRowId);
-      
-      // Find property indices in orderedProperties
-      const startPropertyIndex = orderedProperties.findIndex(p => p.key === startPropertyKey);
-      const endPropertyIndex = orderedProperties.findIndex(p => p.key === endPropertyKey);
-      
-      if (startRowIndex !== -1 && endRowIndex !== -1 && 
-          startPropertyIndex !== -1 && endPropertyIndex !== -1) {
-        // Select all cells in the rectangle
-        const rowStart = Math.min(startRowIndex, endRowIndex);
-        const rowEnd = Math.max(startRowIndex, endRowIndex);
-        const propStart = Math.min(startPropertyIndex, endPropertyIndex);
-        const propEnd = Math.max(startPropertyIndex, endPropertyIndex);
-        
-        const cellsToSelect = new Set<CellKey>();
-        
-        for (let r = rowStart; r <= rowEnd; r++) {
-          const row = allRowsForSelection[r];
-          for (let p = propStart; p <= propEnd; p++) {
-            const property = orderedProperties[p];
-            cellsToSelect.add(`${row.id}-${property.key}`);
-          }
-        }
-        
-        setSelectedCells(cellsToSelect);
-      } else {
-        // Fallback: just select the start cell
-        setSelectedCells(new Set<CellKey>([`${startRowId}-${startPropertyKey}` as CellKey]));
-      }
-      
-      setDragStartCell(null);
-      setDragCurrentCell(null);
-      dragCurrentCellRef.current = null;
-    };
-    
-    // Add event listeners
-    document.addEventListener('mousemove', dragMoveHandler);
-    document.addEventListener('mouseup', dragEndHandler);
-    
-    // Prevent text selection during drag
-    document.body.style.userSelect = 'none';
   };
 
   // Update selected cells during drag (for visual feedback)
@@ -3896,6 +3902,7 @@ export function LibraryAssetsTable({
                           onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                           onClick={(e) => handleCellClick(row.id, property.key, e)}
                           onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
+                          onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
                         >
                           <ReferenceField
                             property={property}
@@ -3976,6 +3983,7 @@ export function LibraryAssetsTable({
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
+                        onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
                       >
                         {mediaValue ? (
                           <div className={styles.mediaCellContent}>
@@ -4076,6 +4084,7 @@ export function LibraryAssetsTable({
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
+                        onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
                       >
                         <div className={styles.booleanToggle}>
                           <Switch
@@ -4183,6 +4192,7 @@ export function LibraryAssetsTable({
                         onDoubleClick={(e) => handleCellDoubleClick(row, e)}
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
+                        onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
                       >
                         <div className={styles.enumSelectWrapper}>
                           <Select
