@@ -122,8 +122,35 @@ export function LibraryAssetsTable({
       });
       
       // 添加新行
+      // 如果有 insert 创建的临时行，优先替换它们（保持位置）
       if (rowsToAdd.length > 0) {
-        yRows.insert(yRows.length, rowsToAdd);
+        // 重新查找 insert 创建的临时行（在删除/更新之后）
+        const currentYjsRows = yRows.toArray();
+        const insertTempRows: Array<{ index: number; id: string }> = [];
+        currentYjsRows.forEach((row, index) => {
+          if (row.id.startsWith('temp-insert-')) {
+            insertTempRows.push({ index, id: row.id });
+          }
+        });
+        // 按索引从小到大排序（保持插入顺序）
+        insertTempRows.sort((a, b) => a.index - b.index);
+        
+        // 优先替换 insert 临时行（保持插入位置）
+        const rowsToReplace = rowsToAdd.slice(0, Math.min(insertTempRows.length, rowsToAdd.length));
+        // 倒序替换（从索引大的开始），避免索引变化
+        for (let i = rowsToReplace.length - 1; i >= 0; i--) {
+          const newRow = rowsToReplace[i];
+          const tempRow = insertTempRows[i];
+          // 替换临时行（保持位置）
+          yRows.delete(tempRow.index, 1);
+          yRows.insert(tempRow.index, [newRow]);
+        }
+        
+        // 剩余的新行添加到末尾
+        const remainingRows = rowsToAdd.slice(insertTempRows.length);
+        if (remainingRows.length > 0) {
+          yRows.insert(yRows.length, remainingRows);
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2710,10 +2737,12 @@ export function LibraryAssetsTable({
       return;
     }
 
-    // Sort row IDs by their index in allRowsForSelection (from top to bottom)
+    // Sort row IDs by their index in Yjs array (not allRowsForSelection, to ensure consistency)
+    // 使用 Yjs 数组来排序，确保与插入操作使用同一个数据源
+    const allRows = yRows.toArray();
     const sortedRowIds = Array.from(rowsToUse).sort((a, b) => {
-      const indexA = allRowsForSelection.findIndex(r => r.id === a);
-      const indexB = allRowsForSelection.findIndex(r => r.id === b);
+      const indexA = allRows.findIndex(r => r.id === a);
+      const indexB = allRows.findIndex(r => r.id === b);
       return indexA - indexB;
     });
 
@@ -2724,19 +2753,21 @@ export function LibraryAssetsTable({
     // All n rows should be inserted consecutively above the first selected row
     const numRowsToInsert = sortedRowIds.length;
     const firstRowId = sortedRowIds[0]; // First selected row (topmost)
-    const firstRow = allRowsForSelection.find(r => r.id === firstRowId);
     
-    if (!firstRow) {
-      console.log('First selected row not found');
-      setBatchEditMenuVisible(false);
-      setBatchEditMenuPosition(null);
-      setContextMenuRowId(null);
-      setContextMenuPosition(null);
-      return;
-    }
-
     setIsSaving(true);
     try {
+      // Find the target row index in Yjs array
+      const allRows = yRows.toArray();
+      const targetRowIndex = allRows.findIndex(r => r.id === firstRowId);
+      
+      if (targetRowIndex === -1) {
+        console.error('Target row not found in Yjs array');
+        setBatchEditMenuVisible(false);
+        setBatchEditMenuPosition(null);
+        setIsSaving(false);
+        return;
+      }
+      
       if (supabase) {
         // Query the first selected row's created_at to calculate insertion position
         const { data: targetRowData, error: queryError } = await supabase
@@ -2757,21 +2788,24 @@ export function LibraryAssetsTable({
         
         const targetCreatedAt = new Date(targetRowData.created_at);
         
-        // Insert n rows above the first selected row
-        // Each row should have created_at = targetCreatedAt - (n - i) * 1000ms
-        // So the first inserted row has the earliest time (appears at the top)
-        // And the last inserted row has the time just before the target row
+        if (targetRowIndex === -1) {
+          console.error('Target row not found in Yjs array');
+          setBatchEditMenuVisible(false);
+          setBatchEditMenuPosition(null);
+          setIsSaving(false);
+          return;
+        }
+        
+        // Create optimistic assets and insert them directly into Yjs at the correct position
         const createdTempIds: string[] = [];
+        const optimisticAssets: AssetRow[] = [];
+        
         for (let i = 0; i < numRowsToInsert; i++) {
           // Calculate created_at: each row is 1 second before the next
-          // First row (i=0): targetCreatedAt - (numRowsToInsert * 1000)ms
-          // Last row (i=numRowsToInsert-1): targetCreatedAt - (1 * 1000)ms
           const offsetMs = (numRowsToInsert - i) * 1000;
           const newCreatedAt = new Date(targetCreatedAt.getTime() - offsetMs);
           
-          const assetName = 'Untitled'; // Required for database, but won't be displayed
-          
-          // Create optimistic asset row with temporary ID
+          const assetName = 'Untitled';
           const tempId = `temp-insert-above-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`;
           createdTempIds.push(tempId);
           
@@ -2779,32 +2813,32 @@ export function LibraryAssetsTable({
             id: tempId,
             libraryId: library.id,
             name: assetName,
-            propertyValues: {}, // Empty property values
+            propertyValues: {},
           };
-
-          // Optimistically add the asset to the display immediately
-          setOptimisticNewAssets(prev => {
-            const newMap = new Map(prev);
-            newMap.set(tempId, optimisticAsset);
-            return newMap;
-          });
           
-          await onSaveAsset(assetName, {}, { createdAt: newCreatedAt });
+          optimisticAssets.push(optimisticAsset);
         }
         
-        // Clean up optimistic assets after parent refreshes
-        setTimeout(() => {
-          createdTempIds.forEach(tempId => {
-            setOptimisticNewAssets(prev => {
-              if (prev.has(tempId)) {
-                const newMap = new Map(prev);
-                newMap.delete(tempId);
-                return newMap;
-              }
-              return prev;
-            });
+        // Insert directly into Yjs at the target index (in reverse order to maintain correct position)
+        for (let i = optimisticAssets.length - 1; i >= 0; i--) {
+          yRows.insert(targetRowIndex, [optimisticAssets[i]]);
+        }
+        
+        // Add to optimisticNewAssets for display
+        optimisticAssets.forEach(asset => {
+          setOptimisticNewAssets(prev => {
+            const newMap = new Map(prev);
+            newMap.set(asset.id, asset);
+            return newMap;
           });
-        }, 2000);
+        });
+        
+        // Save to database asynchronously
+        for (let i = 0; i < numRowsToInsert; i++) {
+          const offsetMs = (numRowsToInsert - i) * 1000;
+          const newCreatedAt = new Date(targetCreatedAt.getTime() - offsetMs);
+          await onSaveAsset('Untitled', {}, { createdAt: newCreatedAt });
+        }
       } else {
         // Fallback if supabase is not available
         const assetName = 'Untitled';
@@ -2897,10 +2931,12 @@ export function LibraryAssetsTable({
       return;
     }
 
-    // Sort row IDs by their index in allRowsForSelection (from top to bottom)
+    // Sort row IDs by their index in Yjs array (not allRowsForSelection, to ensure consistency)
+    // 使用 Yjs 数组来排序，确保与插入操作使用同一个数据源
+    const allRows = yRows.toArray();
     const sortedRowIds = Array.from(rowsToUse).sort((a, b) => {
-      const indexA = allRowsForSelection.findIndex(r => r.id === a);
-      const indexB = allRowsForSelection.findIndex(r => r.id === b);
+      const indexA = allRows.findIndex(r => r.id === a);
+      const indexB = allRows.findIndex(r => r.id === b);
       return indexA - indexB;
     });
 
@@ -2911,19 +2947,21 @@ export function LibraryAssetsTable({
     // All n rows should be inserted consecutively below the last selected row
     const numRowsToInsert = sortedRowIds.length;
     const lastRowId = sortedRowIds[sortedRowIds.length - 1]; // Last selected row (bottommost)
-    const lastRow = allRowsForSelection.find(r => r.id === lastRowId);
     
-    if (!lastRow) {
-      console.log('Last selected row not found');
-      setBatchEditMenuVisible(false);
-      setBatchEditMenuPosition(null);
-      setContextMenuRowId(null);
-      setContextMenuPosition(null);
-      return;
-    }
-
     setIsSaving(true);
     try {
+      // Find the target row index in Yjs array
+      const allRows = yRows.toArray();
+      const targetRowIndex = allRows.findIndex(r => r.id === lastRowId);
+      
+      if (targetRowIndex === -1) {
+        console.error('Target row not found in Yjs array');
+        setBatchEditMenuVisible(false);
+        setBatchEditMenuPosition(null);
+        setIsSaving(false);
+        return;
+      }
+      
       if (supabase) {
         // Query the last selected row's created_at to calculate insertion position
         const { data: targetRowData, error: queryError } = await supabase
@@ -2944,21 +2982,24 @@ export function LibraryAssetsTable({
         
         const targetCreatedAt = new Date(targetRowData.created_at);
         
-        // Insert n rows below the last selected row
-        // Each row should have created_at = targetCreatedAt + (i + 1) * 1000ms
-        // So the first inserted row has the time just after the target row
-        // And the last inserted row has the latest time (appears at the bottom)
+        if (targetRowIndex === -1) {
+          console.error('Target row not found in Yjs array');
+          setBatchEditMenuVisible(false);
+          setBatchEditMenuPosition(null);
+          setIsSaving(false);
+          return;
+        }
+        
+        // Create optimistic assets and insert them directly into Yjs at the correct position
         const createdTempIds: string[] = [];
+        const optimisticAssets: AssetRow[] = [];
+        
         for (let i = 0; i < numRowsToInsert; i++) {
           // Calculate created_at: each row is 1 second after the previous
-          // First row (i=0): targetCreatedAt + (1 * 1000)ms
-          // Last row (i=numRowsToInsert-1): targetCreatedAt + (numRowsToInsert * 1000)ms
           const offsetMs = (i + 1) * 1000;
           const newCreatedAt = new Date(targetCreatedAt.getTime() + offsetMs);
           
-          const assetName = 'Untitled'; // Required for database, but won't be displayed
-          
-          // Create optimistic asset row with temporary ID
+          const assetName = 'Untitled';
           const tempId = `temp-insert-below-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`;
           createdTempIds.push(tempId);
           
@@ -2966,32 +3007,33 @@ export function LibraryAssetsTable({
             id: tempId,
             libraryId: library.id,
             name: assetName,
-            propertyValues: {}, // Empty property values
+            propertyValues: {},
           };
-
-          // Optimistically add the asset to the display immediately
-          setOptimisticNewAssets(prev => {
-            const newMap = new Map(prev);
-            newMap.set(tempId, optimisticAsset);
-            return newMap;
-          });
           
-          await onSaveAsset(assetName, {}, { createdAt: newCreatedAt });
+          optimisticAssets.push(optimisticAsset);
         }
         
-        // Clean up optimistic assets after parent refreshes
-        setTimeout(() => {
-          createdTempIds.forEach(tempId => {
-            setOptimisticNewAssets(prev => {
-              if (prev.has(tempId)) {
-                const newMap = new Map(prev);
-                newMap.delete(tempId);
-                return newMap;
-              }
-              return prev;
-            });
+        // Insert directly into Yjs at the target index + 1 (below the target row)
+        const insertIndex = targetRowIndex + 1;
+        for (let i = optimisticAssets.length - 1; i >= 0; i--) {
+          yRows.insert(insertIndex, [optimisticAssets[i]]);
+        }
+        
+        // Add to optimisticNewAssets for display
+        optimisticAssets.forEach(asset => {
+          setOptimisticNewAssets(prev => {
+            const newMap = new Map(prev);
+            newMap.set(asset.id, asset);
+            return newMap;
           });
-        }, 2000);
+        });
+        
+        // Save to database asynchronously
+        for (let i = 0; i < numRowsToInsert; i++) {
+          const offsetMs = (i + 1) * 1000;
+          const newCreatedAt = new Date(targetCreatedAt.getTime() + offsetMs);
+          await onSaveAsset('Untitled', {}, { createdAt: newCreatedAt });
+        }
       } else {
         // Fallback if supabase is not available
         const assetName = 'Untitled';
