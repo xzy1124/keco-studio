@@ -1510,11 +1510,11 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                               className={styles.libraryBackButton}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (currentIds.projectId) {
-                                  router.push(`/${currentIds.projectId}`);
+                                if (currentIds.projectId && currentIds.libraryId) {
+                                  router.push(`/${currentIds.projectId}/${currentIds.libraryId}`);
                                 }
                               }}
-                              title="Back to tree view"
+                              title="Back to library"
                             >
                               <Image
                                 src={sidebarFolderIcon3}
