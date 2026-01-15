@@ -377,6 +377,9 @@ export function LibraryAssetsTable({
   // Fill drag state (for Excel-like fill down functionality)
   const [fillDragStartCell, setFillDragStartCell] = useState<{ rowId: string; propertyKey: string; startY: number } | null>(null);
   const isFillingCellsRef = useRef(false);
+  
+  // Track hover state for expand icon (show only when hovering over bottom-right corner of selected cell)
+  const [hoveredCellForExpand, setHoveredCellForExpand] = useState<{ rowId: string; propertyKey: string } | null>(null);
 
   // Hover state for asset card
   const [hoveredAssetId, setHoveredAssetId] = useState<string | null>(null);
@@ -3871,6 +3874,7 @@ export function LibraryAssetsTable({
                       const cellKey: CellKey = `${row.id}-${property.key}`;
                       const isCellSelected = selectedCells.has(cellKey);
                       const isCellCut = cutCells.has(cellKey);
+                      const showExpandIcon = selectedCells.size === 1 && isCellSelected;
                       const isMultipleSelected = selectedCells.size > 1 && isCellSelected;
                       const isSingleSelected = selectedCells.size === 1 && isCellSelected;
                       
@@ -3894,6 +3898,10 @@ export function LibraryAssetsTable({
                       // Check if cell is on border of selection (only show outer border)
                       const selectionBorderClass = getSelectionBorderClasses(row.id, propertyIndex);
                       
+                      const isHoveredForExpand = hoveredCellForExpand?.rowId === row.id && 
+                        hoveredCellForExpand?.propertyKey === property.key;
+                      const shouldShowExpandIcon = showExpandIcon && isHoveredForExpand;
+                      
                       return (
                         <td
                           key={property.id}
@@ -3903,6 +3911,30 @@ export function LibraryAssetsTable({
                           onClick={(e) => handleCellClick(row.id, property.key, e)}
                           onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                           onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
+                          onMouseMove={(e) => {
+                            if (showExpandIcon) {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.clientX - rect.left;
+                              const y = e.clientY - rect.top;
+                              const width = rect.width;
+                              const height = rect.height;
+                              
+                              // Check if mouse is in bottom-right corner (last 20px from right and bottom)
+                              const CORNER_SIZE = 20;
+                              if (x >= width - CORNER_SIZE && y >= height - CORNER_SIZE) {
+                                setHoveredCellForExpand({ rowId: row.id, propertyKey: property.key });
+                              } else {
+                                if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                                  setHoveredCellForExpand(null);
+                                }
+                              }
+                            }
+                          }}
+                          onMouseLeave={() => {
+                            if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                              setHoveredCellForExpand(null);
+                            }
+                          }}
                         >
                           <ReferenceField
                             property={property}
@@ -3913,23 +3945,25 @@ export function LibraryAssetsTable({
                             onAvatarMouseLeave={handleAvatarMouseLeave}
                             onOpenReferenceModal={handleOpenReferenceModal}
                           />
-                          <div
-                            className={styles.cellExpandIcon}
-                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
-                          >
-                            <Image
-                              src={batchEditAddIcon}
-                              alt="Expand selection"
-                              width={18}
-                              height={18}
-                              style={{ pointerEvents: 'none' }}
-                            />
-                          </div>
+                          {shouldShowExpandIcon && (
+                            <div
+                              className={styles.cellExpandIcon}
+                              onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                            >
+                              <Image
+                                src={batchEditAddIcon}
+                                alt="Expand selection"
+                                width={18}
+                                height={18}
+                                style={{ pointerEvents: 'none' }}
+                              />
+                            </div>
+                          )}
                         </td>
                       );
-                  }
-                  
-                  // Check if this is an image or file type field
+                    }
+                    
+                    // Check if this is an image or file type field
                   if (property.dataType === 'image' || property.dataType === 'file') {
                     const value = row.propertyValues[property.key];
                     let mediaValue: MediaFileMetadata | null = null;
@@ -3975,6 +4009,10 @@ export function LibraryAssetsTable({
                     // Check if cell is on border of selection (only show outer border)
                     const selectionBorderClass = getSelectionBorderClasses(row.id, propertyIndex);
                     
+                    const isHoveredForExpand = hoveredCellForExpand?.rowId === row.id && 
+                      hoveredCellForExpand?.propertyKey === property.key;
+                    const shouldShowExpandIcon = showExpandIcon && isHoveredForExpand;
+                    
                     return (
                       <td
                         key={property.id}
@@ -3984,6 +4022,30 @@ export function LibraryAssetsTable({
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                         onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
+                        onMouseMove={(e) => {
+                          if (showExpandIcon) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const y = e.clientY - rect.top;
+                            const width = rect.width;
+                            const height = rect.height;
+                            
+                            // Check if mouse is in bottom-right corner (last 20px from right and bottom)
+                            const CORNER_SIZE = 20;
+                            if (x >= width - CORNER_SIZE && y >= height - CORNER_SIZE) {
+                              setHoveredCellForExpand({ rowId: row.id, propertyKey: property.key });
+                            } else {
+                              if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                                setHoveredCellForExpand(null);
+                              }
+                            }
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                            setHoveredCellForExpand(null);
+                          }
+                        }}
                       >
                         {mediaValue ? (
                           <div className={styles.mediaCellContent}>
@@ -4021,18 +4083,20 @@ export function LibraryAssetsTable({
                           // Show blank instead of dash for empty media fields
                           <span></span>
                         )}
-                        <div
-                          className={styles.cellExpandIcon}
-                          onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
-                        >
-                          <Image
-                            src={batchEditAddIcon}
-                            alt="Expand selection"
-                            width={18}
-                            height={18}
-                            style={{ pointerEvents: 'none' }}
-                          />
-                        </div>
+                        {shouldShowExpandIcon && (
+                          <div
+                            className={styles.cellExpandIcon}
+                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                          >
+                            <Image
+                              src={batchEditAddIcon}
+                              alt="Expand selection"
+                              width={18}
+                              height={18}
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          </div>
+                        )}
                       </td>
                     );
                   }
@@ -4076,6 +4140,10 @@ export function LibraryAssetsTable({
                     // Check if cell is on border of selection (only show outer border)
                     const selectionBorderClass = getSelectionBorderClasses(row.id, propertyIndex);
                     
+                    const isHoveredForExpand = hoveredCellForExpand?.rowId === row.id && 
+                      hoveredCellForExpand?.propertyKey === property.key;
+                    const shouldShowExpandIcon = showExpandIcon && isHoveredForExpand;
+                    
                     return (
                       <td
                         key={property.id}
@@ -4085,6 +4153,30 @@ export function LibraryAssetsTable({
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                         onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
+                        onMouseMove={(e) => {
+                          if (showExpandIcon) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const y = e.clientY - rect.top;
+                            const width = rect.width;
+                            const height = rect.height;
+                            
+                            // Check if mouse is in bottom-right corner (last 20px from right and bottom)
+                            const CORNER_SIZE = 20;
+                            if (x >= width - CORNER_SIZE && y >= height - CORNER_SIZE) {
+                              setHoveredCellForExpand({ rowId: row.id, propertyKey: property.key });
+                            } else {
+                              if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                                setHoveredCellForExpand(null);
+                              }
+                            }
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                            setHoveredCellForExpand(null);
+                          }
+                        }}
                       >
                         <div className={styles.booleanToggle}>
                           <Switch
@@ -4128,18 +4220,20 @@ export function LibraryAssetsTable({
                             {checked ? 'True' : 'False'}
                           </span>
                         </div>
-                        <div
-                          className={styles.cellExpandIcon}
-                          onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
-                        >
-                          <Image
-                            src={batchEditAddIcon}
-                            alt="Expand selection"
-                            width={18}
-                            height={18}
-                            style={{ pointerEvents: 'none' }}
-                          />
-                        </div>
+                        {shouldShowExpandIcon && (
+                          <div
+                            className={styles.cellExpandIcon}
+                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                          >
+                            <Image
+                              src={batchEditAddIcon}
+                              alt="Expand selection"
+                              width={18}
+                              height={18}
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          </div>
+                        )}
                       </td>
                     );
                   }
@@ -4184,6 +4278,10 @@ export function LibraryAssetsTable({
                     // Check if cell is on border of selection (only show outer border)
                     const selectionBorderClass = getSelectionBorderClasses(row.id, propertyIndex);
                     
+                    const isHoveredForExpand = hoveredCellForExpand?.rowId === row.id && 
+                      hoveredCellForExpand?.propertyKey === property.key;
+                    const shouldShowExpandIcon = showExpandIcon && isHoveredForExpand;
+                    
                     return (
                       <td
                         key={property.id}
@@ -4193,6 +4291,30 @@ export function LibraryAssetsTable({
                         onClick={(e) => handleCellClick(row.id, property.key, e)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                         onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
+                        onMouseMove={(e) => {
+                          if (showExpandIcon) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const y = e.clientY - rect.top;
+                            const width = rect.width;
+                            const height = rect.height;
+                            
+                            // Check if mouse is in bottom-right corner (last 20px from right and bottom)
+                            const CORNER_SIZE = 20;
+                            if (x >= width - CORNER_SIZE && y >= height - CORNER_SIZE) {
+                              setHoveredCellForExpand({ rowId: row.id, propertyKey: property.key });
+                            } else {
+                              if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                                setHoveredCellForExpand(null);
+                              }
+                            }
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                            setHoveredCellForExpand(null);
+                          }
+                        }}
                       >
                         <div className={styles.enumSelectWrapper}>
                           <Select
@@ -4272,18 +4394,20 @@ export function LibraryAssetsTable({
                             }}
                           />
                         </div>
-                        <div
-                          className={styles.cellExpandIcon}
-                          onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
-                        >
-                          <Image
-                            src={batchEditAddIcon}
-                            alt="Expand selection"
-                            width={18}
-                            height={18}
-                            style={{ pointerEvents: 'none' }}
-                          />
-                        </div>
+                        {shouldShowExpandIcon && (
+                          <div
+                            className={styles.cellExpandIcon}
+                            onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                          >
+                            <Image
+                              src={batchEditAddIcon}
+                              alt="Expand selection"
+                              width={18}
+                              height={18}
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          </div>
+                        )}
                       </td>
                     );
                   }
@@ -4310,6 +4434,7 @@ export function LibraryAssetsTable({
                   const cellKey: CellKey = `${row.id}-${property.key}`;
                   const isCellSelected = selectedCells.has(cellKey);
                   const isCellCut = cutCells.has(cellKey);
+                  const showExpandIcon = selectedCells.size === 1 && isCellSelected;
                   const isMultipleSelected = selectedCells.size > 1 && isCellSelected;
                   const isSingleSelected = selectedCells.size === 1 && isCellSelected;
                   
@@ -4333,6 +4458,10 @@ export function LibraryAssetsTable({
                   // Check if cell is on border of selection (only show outer border)
                   const selectionBorderClass = getSelectionBorderClasses(row.id, propertyIndex);
                   
+                  const isHoveredForExpand = hoveredCellForExpand?.rowId === row.id && 
+                    hoveredCellForExpand?.propertyKey === property.key;
+                  const shouldShowExpandIcon = showExpandIcon && isHoveredForExpand;
+                  
                   return (
                     <td
                       key={property.id}
@@ -4342,6 +4471,30 @@ export function LibraryAssetsTable({
                       onClick={(e) => handleCellClick(row.id, property.key, e)}
                       onContextMenu={(e) => handleCellContextMenu(e, row.id, property.key)}
                       onMouseDown={(e) => handleCellFillDragStart(row.id, property.key, e)}
+                      onMouseMove={(e) => {
+                        if (showExpandIcon) {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const x = e.clientX - rect.left;
+                          const y = e.clientY - rect.top;
+                          const width = rect.width;
+                          const height = rect.height;
+                          
+                          // Check if mouse is in bottom-right corner (last 20px from right and bottom)
+                          const CORNER_SIZE = 20;
+                          if (x >= width - CORNER_SIZE && y >= height - CORNER_SIZE) {
+                            setHoveredCellForExpand({ rowId: row.id, propertyKey: property.key });
+                          } else {
+                            if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                              setHoveredCellForExpand(null);
+                            }
+                          }
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        if (hoveredCellForExpand?.rowId === row.id && hoveredCellForExpand?.propertyKey === property.key) {
+                          setHoveredCellForExpand(null);
+                        }
+                      }}
                     >
                       {isNameField ? (
                         // Name field: show text + view detail button
@@ -4376,18 +4529,20 @@ export function LibraryAssetsTable({
                           {display || ''}
                         </span>
                         )}
-                      <div
-                        className={styles.cellExpandIcon}
-                        onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
-                      >
-                        <Image
-                          src={batchEditAddIcon}
-                          alt="Expand selection"
-                          width={18}
-                          height={18}
-                          style={{ pointerEvents: 'none' }}
-                        />
-                      </div>
+                      {shouldShowExpandIcon && (
+                        <div
+                          className={styles.cellExpandIcon}
+                          onMouseDown={(e) => handleCellDragStart(row.id, property.key, e)}
+                        >
+                          <Image
+                            src={batchEditAddIcon}
+                            alt="Expand selection"
+                            width={18}
+                            height={18}
+                            style={{ pointerEvents: 'none' }}
+                          />
+                        </div>
+                      )}
                     </td>
                   );
                 })}
