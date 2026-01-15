@@ -4181,15 +4181,51 @@ export function LibraryAssetsTable({
                                   };
                                   await onUpdateAsset(row.id, row.name, updatedPropertyValues);
                                   
-                                  // Remove optimistic value after successful update
-                                  // The component will re-render with new props from parent
-                                  setOptimisticBooleanValues(prev => {
-                                    const next = { ...prev };
-                                    delete next[optimisticKey];
-                                    return next;
-                                  });
+                                  // Wait for parent component to update rows prop
+                                  // Check multiple times if the value has been updated before removing optimistic value
+                                  const checkAndRemoveOptimistic = (attempts = 0) => {
+                                    if (attempts >= 10) {
+                                      // After 10 attempts (1 second), force remove optimistic value
+                                      setOptimisticBooleanValues(prev => {
+                                        if (optimisticKey in prev) {
+                                          const next = { ...prev };
+                                          delete next[optimisticKey];
+                                          return next;
+                                        }
+                                        return prev;
+                                      });
+                                      return;
+                                    }
+                                    
+                                    // Check if the actual row value matches the new value
+                                    // This means the parent component has updated the rows prop
+                                    const currentRow = rows.find(r => r.id === row.id);
+                                    if (currentRow) {
+                                      const currentValue = currentRow.propertyValues[property.key];
+                                      const currentChecked = currentValue === true || currentValue === 'true' || String(currentValue).toLowerCase() === 'true';
+                                      
+                                      if (currentChecked === newValue) {
+                                        // Value has been updated, safe to remove optimistic value
+                                        setOptimisticBooleanValues(prev => {
+                                          if (optimisticKey in prev) {
+                                            const next = { ...prev };
+                                            delete next[optimisticKey];
+                                            return next;
+                                          }
+                                          return prev;
+                                        });
+                                        return;
+                                      }
+                                    }
+                                    
+                                    // Value not updated yet, check again after a short delay
+                                    setTimeout(() => checkAndRemoveOptimistic(attempts + 1), 100);
+                                  };
+                                  
+                                  // Start checking after a short delay
+                                  setTimeout(() => checkAndRemoveOptimistic(0), 50);
                                 } catch (error) {
-                                  // On error, revert optimistic update
+                                  // On error, revert optimistic update immediately
                                   setOptimisticBooleanValues(prev => {
                                     const next = { ...prev };
                                     delete next[optimisticKey];
