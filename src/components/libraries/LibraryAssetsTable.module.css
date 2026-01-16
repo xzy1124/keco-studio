@@ -920,7 +920,6 @@ td.cellCopy.copyBorderRight:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
   min-height: 24px;
 }
 

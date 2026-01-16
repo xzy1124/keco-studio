@@ -1179,7 +1179,7 @@ export function LibraryAssetsTable({
             />
           </div>
         ) : (
-          <>
+          <div className={styles.referenceSelectedAssetLeft}>
             <Image
               src={libraryAssetTableIcon}
               alt=""
@@ -1206,7 +1206,7 @@ export function LibraryAssetsTable({
                 e.stopPropagation();
               }}
             />
-          </>
+          </div>
         )}
       </div>
     );
