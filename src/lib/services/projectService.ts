@@ -4,6 +4,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import {
   verifyProjectCreation,
   verifyProjectOwnership,
+  verifyProjectAccess,
   getCurrentUserId,
 } from './authorizationService';
 
@@ -134,17 +135,70 @@ export async function listProjects(supabase: SupabaseClient): Promise<Project[]>
   const cacheKey = `projects:list:${userId}`;
   
   return globalRequestCache.fetch(cacheKey, async () => {
-    const { data, error } = await supabase
+    // Fetch projects where user is owner OR collaborator
+    // Method 1: Get owned projects
+    const { data: ownedProjects, error: ownedError } = await supabase
       .from('projects')
       .select('*')
       .eq('owner_id', userId)
       .order('created_at', { ascending: true });
 
-    if (error) {
-      throw error;
+    if (ownedError) {
+      throw ownedError;
     }
 
-    return data || [];
+    // Method 2: Get projects where user is a collaborator
+    // First get the project IDs from project_collaborators
+    const { data: collaboratorRecords, error: collaboratorError } = await supabase
+      .from('project_collaborators')
+      .select('project_id')
+      .eq('user_id', userId)
+      .not('accepted_at', 'is', null);
+
+    if (collaboratorError) {
+      console.error('Error fetching collaborator projects:', collaboratorError);
+      // Continue with just owned projects if collaborator query fails
+    }
+
+    // Then fetch the actual project details for those IDs
+    let collaboratorProjects: Project[] = [];
+    if (collaboratorRecords && collaboratorRecords.length > 0) {
+      const projectIds = collaboratorRecords.map(record => record.project_id);
+      
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('*')
+        .in('id', projectIds);
+
+      if (projectsError) {
+        // Continue with just owned projects
+      } else {
+        collaboratorProjects = projectsData || [];
+      }
+    }
+
+    // Combine and deduplicate projects
+    const projectsMap = new Map<string, Project>();
+    
+    // Add owned projects
+    (ownedProjects || []).forEach((project) => {
+      projectsMap.set(project.id, project);
+    });
+    
+    // Add collaborator projects
+    collaboratorProjects.forEach((project) => {
+      if (!projectsMap.has(project.id)) {
+        projectsMap.set(project.id, project);
+      }
+    });
+    
+    // Convert to array and sort by created_at
+    const allProjects = Array.from(projectsMap.values());
+    allProjects.sort((a, b) => {
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+
+    return allProjects;
   });
 }
 
@@ -153,8 +207,8 @@ export async function getProject(
   projectId: string
 ): Promise<Project | null> {
  
-  await verifyProjectOwnership(supabase, projectId);
-  
+  await verifyProjectAccess(supabase, projectId);
+
   // Use request cache to prevent duplicate requests
   const { globalRequestCache } = await import('@/lib/hooks/useRequestCache');
   const cacheKey = `project:${projectId}`;
