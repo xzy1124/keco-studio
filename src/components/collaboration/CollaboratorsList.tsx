@@ -291,7 +291,7 @@ export default function CollaboratorsList({
           const effectiveRole = getEffectiveRole(collab.id, collab.role);
           const isRemoving = isBeingRemoved(collab.id);
           const isLoading = loadingActions.has(collab.id);
-          const isSelf = isCurrentUser(collab.user_id);
+          const isSelf = isCurrentUser(collab.userId);
           const isConfirmingDelete = confirmingDelete === collab.id;
           const displayName = getDisplayName(collab);
           const email = getEmail(collab);
@@ -310,7 +310,7 @@ export default function CollaboratorsList({
                 <div 
                   className={styles.avatar}
                   style={{ 
-                    backgroundColor: collab.avatar_color || '#94a3b8' 
+                    backgroundColor: collab.avatarColor || '#94a3b8' 
                   }}
                 >
                   {displayName.charAt(0).toUpperCase()}
@@ -323,7 +323,7 @@ export default function CollaboratorsList({
                     {isSelf && (
                       <span className={styles.youBadge}>(YOU)</span>
                     )}
-                    {collab.is_owner && (
+                    {collab.role === 'admin' && (
                       <span className={styles.ownerBadge}>Owner</span>
                     )}
                   </div>
