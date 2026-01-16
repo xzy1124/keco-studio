@@ -2424,14 +2424,14 @@ export function LibraryAssetsTable({
       setSelectedCells(new Set());
       // Show batch edit menu (operations will use selectedRowIds)
       setBatchEditMenuVisible(true);
-      setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
+      setBatchEditMenuPosition(adjustMenuPosition(e.clientX, e.clientY));
       return;
     }
     
     // Priority 2: If there are selected cells (from drag selection), show batch edit menu
     if (selectedCells.size > 0) {
       setBatchEditMenuVisible(true);
-      setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
+      setBatchEditMenuPosition(adjustMenuPosition(e.clientX, e.clientY));
       return;
     }
     
@@ -2452,14 +2452,14 @@ export function LibraryAssetsTable({
       setSelectedCells(new Set());
       // Show batch edit menu (operations will use selectedRowIds)
       setBatchEditMenuVisible(true);
-      setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
+      setBatchEditMenuPosition(adjustMenuPosition(e.clientX, e.clientY));
       return;
     }
     
     // Priority 2: If there are already selected cells (from drag selection), use them
     if (selectedCells.size > 0) {
       setBatchEditMenuVisible(true);
-      setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
+      setBatchEditMenuPosition(adjustMenuPosition(e.clientX, e.clientY));
       return;
     }
     
@@ -2471,8 +2471,30 @@ export function LibraryAssetsTable({
     
     // Show batch edit menu
     setBatchEditMenuVisible(true);
-    setBatchEditMenuPosition({ x: e.clientX, y: e.clientY });
+    setBatchEditMenuPosition(adjustMenuPosition(e.clientX, e.clientY));
   };
+
+  // Helper function to adjust context menu position to ensure it's fully visible
+  const adjustMenuPosition = useCallback((x: number, y: number, menuHeight: number = 400): { x: number; y: number } => {
+    const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+    const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    
+    // Adjust Y position if menu would be cut off at bottom
+    let adjustedY = y;
+    if (y + menuHeight > windowHeight) {
+      // Position menu above the cursor if it would be cut off
+      adjustedY = Math.max(10, y - menuHeight);
+    }
+    
+    // Adjust X position if menu would be cut off at right
+    let adjustedX = x;
+    const menuWidth = 180; // minWidth from batchEditMenu style
+    if (x + menuWidth > windowWidth) {
+      adjustedX = Math.max(10, windowWidth - menuWidth - 10);
+    }
+    
+    return { x: adjustedX, y: adjustedY };
+  }, []);
 
   // Helper function to check if a cell is on the border of cut selection
   const getCutBorderClasses = useCallback((rowId: string, propertyIndex: number): string => {
