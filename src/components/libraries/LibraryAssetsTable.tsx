@@ -5158,41 +5158,7 @@ export function LibraryAssetsTable({
                         }
                       }}
                     >
-                      {isNameField ? (
-                        // Name field: show text + view detail button
-                        <div className={styles.cellContent}>
-                          <span 
-                            className={styles.cellText}
-                            onDoubleClick={(e) => {
-                              // Ensure double click on name field text triggers editing
-                              handleCellDoubleClick(row, property, e);
-                            }}
-                          >
-                            {display ? display : <span className={styles.placeholderValue}>—</span>}
-                          </span>
-                          <button
-                            className={styles.viewDetailButton}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleViewAssetDetail(row, e);
-                            }}
-                            onDoubleClick={(e) => {
-                              // Prevent double click from bubbling to cell
-                              e.stopPropagation();
-                            }}
-                            title={userRole === 'admin' ? "View asset details (Ctrl/Cmd+Click for new tab)" : "Only admin can view asset details"}
-                            disabled={userRole !== 'admin'}
-                            style={userRole !== 'admin' ? { cursor: 'not-allowed', opacity: 0.5 } : undefined}
-                          >
-                            <Image
-                              src={assetTableIcon}
-                              alt="View"
-                              width={20}
-                              height={20}
-                            />
-                          </button>
-                        </div>
-                      ) : isCellEditing ? (
+                      {isCellEditing ? (
                         // Cell is being edited: use contentEditable for direct cell editing
                         <span
                           ref={editingCellRef}
@@ -5247,8 +5213,39 @@ export function LibraryAssetsTable({
                       ) : (
                         <>
                           {isNameField ? (
-                            // Name field: show text + view detail button (already handled above)
-                            null
+                            // Name field: show text + view detail button
+                            <div className={styles.cellContent}>
+                              <span 
+                                className={styles.cellText}
+                                onDoubleClick={(e) => {
+                                  // Ensure double click on name field text triggers editing
+                                  handleCellDoubleClick(row, property, e);
+                                }}
+                              >
+                                {display ? display : <span className={styles.placeholderValue}>—</span>}
+                              </span>
+                              <button
+                                className={styles.viewDetailButton}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewAssetDetail(row, e);
+                                }}
+                                onDoubleClick={(e) => {
+                                  // Prevent double click from bubbling to cell
+                                  e.stopPropagation();
+                                }}
+                                title={userRole === 'admin' ? "View asset details (Ctrl/Cmd+Click for new tab)" : "Only admin can view asset details"}
+                                disabled={userRole !== 'admin'}
+                                style={userRole !== 'admin' ? { cursor: 'not-allowed', opacity: 0.5 } : undefined}
+                              >
+                                <Image
+                                  src={assetTableIcon}
+                                  alt="View"
+                                  width={20}
+                                  height={20}
+                                />
+                              </button>
+                            </div>
                           ) : (
                             // Other fields: show text only
                             <span className={styles.cellText}>
