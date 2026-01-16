@@ -11,14 +11,15 @@ export type ContextMenuAction =
   | 'collaborators'
   | 'duplicate'
   | 'move-to'
+  | 'collaborators'
   | 'delete';
 
 type ContextMenuProps = {
   x: number;
   y: number;
+  type?: 'project' | 'library' | 'folder' | 'asset';
   onClose: () => void;
   onAction?: (action: ContextMenuAction) => void;
-  type?: 'project' | 'library' | 'folder' | 'asset';
 };
 
 export function ContextMenu({ x, y, onClose, onAction, type }: ContextMenuProps) {
@@ -71,10 +72,7 @@ export function ContextMenu({ x, y, onClose, onAction, type }: ContextMenuProps)
           </button>
           <button
             className={styles.menuItem}
-            onClick={() => {
-              // Not implemented yet, just close menu
-              onClose();
-            }}
+            onClick={() => handleAction('collaborators')}
           >
             Collaborators
           </button>

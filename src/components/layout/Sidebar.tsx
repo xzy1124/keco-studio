@@ -98,6 +98,10 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   const displayName = userProfile?.username || userProfile?.full_name || userProfile?.email || "Guest";
   const isGuest = !userProfile;
   
+  // User role in current project
+  const [userRole, setUserRole] = useState<'admin' | 'editor' | 'viewer' | null>(null);
+  const [isProjectOwner, setIsProjectOwner] = useState(false);
+  
   // Resolve avatar: use avatar_url if valid, otherwise fallback to initial
   const hasValidAvatar = userProfile?.avatar_url && userProfile.avatar_url.trim() !== "";
   const avatarInitial = displayName.charAt(0).toUpperCase();
@@ -191,9 +195,16 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     let assetId: string | null = null;
     let isLibraryPage = false; // True when on /[projectId]/[libraryId] (not predefine, not asset)
     
+    // Special route segments that are not libraryIds
+    const specialRoutes = ['folder', 'collaborators', 'settings', 'members'];
+    
     if (parts.length >= 2 && parts[1] === 'folder' && parts[2]) {
       // URL format: /[projectId]/folder/[folderId]
       folderId = parts[2];
+    } else if (parts.length >= 2 && specialRoutes.includes(parts[1])) {
+      // URL format: /[projectId]/collaborators or other special routes
+      // Don't treat these as libraryId
+      libraryId = null;
     } else if (parts.length >= 3 && parts[2] === 'predefine') {
       // URL format: /[projectId]/[libraryId]/predefine
       libraryId = parts[1];
@@ -218,6 +229,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     data: projects = [],
     isLoading: loadingProjects,
     error: projectsError,
+    refetch: refetchProjects,
   } = useQuery({
     queryKey: ['projects'],
     queryFn: () => listProjects(supabase),
@@ -232,7 +244,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
   });
 
   // Use React Query to fetch folders and libraries
-  // Only execute query when projectId exists
+  // Only execute query when projectId exists and is a valid UUID
   const {
     data: foldersAndLibraries,
     isLoading: loadingFoldersAndLibraries,
@@ -248,7 +260,8 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
       ]);
       return { folders: foldersData, libraries: librariesData };
     },
-    enabled: !!currentIds.projectId, // Only query when projectId exists
+    // Only query when projectId exists AND is a valid UUID (not "projects" string)
+    enabled: !!currentIds.projectId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentIds.projectId || ''),
     staleTime: 2 * 60 * 1000, // Data is considered fresh for 2 minutes, reduces duplicate requests
     // Don't refetch if data is in cache and not expired
     refetchOnMount: false, // Use cache to avoid duplicate requests
@@ -328,6 +341,95 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
       prevProjectIdRef.current = currentIds.projectId;
     }
   }, [currentIds.projectId]);
+
+  // Fetch user role in current project
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      if (!currentIds.projectId || !userProfile) {
+        setUserRole(null);
+        setIsProjectOwner(false);
+        return;
+      }
+      
+      try {
+        // Get session for authorization
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setUserRole(null);
+          setIsProjectOwner(false);
+          return;
+        }
+        
+        // Call API to get user role
+        const roleResponse = await fetch(`/api/projects/${currentIds.projectId}/role`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        });
+        
+        if (roleResponse.ok) {
+          const roleResult = await roleResponse.json();
+          setUserRole(roleResult.role || null);
+          setIsProjectOwner(roleResult.isOwner || false);
+          console.log('[Sidebar] User role:', roleResult.role, 'isOwner:', roleResult.isOwner);
+        } else {
+          setUserRole(null);
+          setIsProjectOwner(false);
+        }
+      } catch (error) {
+        console.error('[Sidebar] Error fetching user role:', error);
+        setUserRole(null);
+        setIsProjectOwner(false);
+      }
+    };
+    
+    fetchUserRole();
+  }, [currentIds.projectId, userProfile, supabase]);
+
+  // Smart cache refresh: If user is viewing a project that's not in the sidebar,
+  // it might mean they were just added as a collaborator. Refresh the projects list.
+  useEffect(() => {
+    if (currentIds.projectId && projects.length > 0 && !loadingProjects) {
+      const currentProjectExists = projects.some(p => p.id === currentIds.projectId);
+      if (!currentProjectExists) {
+        console.log('[Sidebar] Current project not in list, refreshing projects...');
+        console.log('[Sidebar] Current project ID:', currentIds.projectId);
+        console.log('[Sidebar] Projects in list:', projects.map(p => p.id));
+        
+        // Clear globalRequestCache and refetch
+        (async () => {
+          try {
+            const { globalRequestCache } = await import('@/lib/hooks/useRequestCache');
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              // Clear projects list cache
+              const projectsCacheKey = `projects:list:${user.id}`;
+              globalRequestCache.invalidate(projectsCacheKey);
+              console.log('[Sidebar] Cleared globalRequestCache for key:', projectsCacheKey);
+              
+              // Clear all caches for this project (important!)
+              // This ensures fresh data and permissions
+              const cacheKeys = [
+                `auth:project-access:${currentIds.projectId}:${user.id}`,
+                `auth:project-ownership:${currentIds.projectId}:${user.id}`,
+                `auth:project-role:${currentIds.projectId}:${user.id}`,
+                `project:${currentIds.projectId}`,
+              ];
+              cacheKeys.forEach(key => {
+                globalRequestCache.invalidate(key);
+                console.log('[Sidebar] Cleared cache for key:', key);
+              });
+            }
+            // Refetch projects list
+            await refetchProjects();
+            console.log('[Sidebar] Projects list refreshed');
+          } catch (error) {
+            console.error('[Sidebar] Error refreshing projects:', error);
+          }
+        })();
+      }
+    }
+  }, [currentIds.projectId, projects, loadingProjects, refetchProjects, supabase]);
 
   // Sync selectedFolderId from URL
   useEffect(() => {
@@ -506,11 +608,48 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
 
 
   // actions
-  const handleProjectClick = (projectId: string) => {
+  const handleProjectClick = async (projectId: string) => {
+    // Clear all related caches before navigation to ensure fresh data
+    // This is important for collaborators who might have stale cache
+    try {
+      const { globalRequestCache } = await import('@/lib/hooks/useRequestCache');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const cacheKeys = [
+          // Authorization caches
+          `auth:project-access:${projectId}:${user.id}`,
+          `auth:project-ownership:${projectId}:${user.id}`,
+          `auth:project-role:${projectId}:${user.id}`,
+          // Project data cache
+          `project:${projectId}`,
+        ];
+        cacheKeys.forEach(key => {
+          globalRequestCache.invalidate(key);
+        });
+      }
+    } catch (error) {
+      console.error('[Sidebar] Error clearing caches:', error);
+    }
     router.push(`/${projectId}`);
   };
 
-  const handleLibraryClick = (projectId: string, libraryId: string) => {
+  const handleLibraryClick = async (projectId: string, libraryId: string) => {
+    // Clear authorization caches before navigation
+    try {
+      const { globalRequestCache } = await import('@/lib/hooks/useRequestCache');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const authCacheKeys = [
+          `auth:project-access:${projectId}:${user.id}`,
+          `auth:library-access:${libraryId}:${user.id}`,
+        ];
+        authCacheKeys.forEach(key => {
+          globalRequestCache.invalidate(key);
+        });
+      }
+    } catch (error) {
+      console.error('[Sidebar] Error clearing auth caches:', error);
+    }
     router.push(`/${projectId}/${libraryId}`);
     fetchAssets(libraryId);
   };
@@ -520,7 +659,24 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     router.push(`/${projectId}/${libraryId}/predefine`);
   }, [router]);
 
-  const handleAssetClick = (projectId: string, libraryId: string, assetId: string) => {
+  const handleAssetClick = async (projectId: string, libraryId: string, assetId: string) => {
+    // Clear authorization caches before navigation
+    try {
+      const { globalRequestCache } = await import('@/lib/hooks/useRequestCache');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const authCacheKeys = [
+          `auth:project-access:${projectId}:${user.id}`,
+          `auth:library-access:${libraryId}:${user.id}`,
+          `auth:asset-access:${assetId}:${user.id}`,
+        ];
+        authCacheKeys.forEach(key => {
+          globalRequestCache.invalidate(key);
+        });
+      }
+    } catch (error) {
+      console.error('[Sidebar] Error clearing auth caches:', error);
+    }
     router.push(`/${projectId}/${libraryId}/${assetId}`);
   };
 
@@ -653,8 +809,8 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         // });
       }
       
-      // Create button node for "Create new library" - always first child
-      const createButtonNode: DataNode = {
+      // Create button node for "Create new library" - only for admin
+      const createButtonNode: DataNode | null = userRole === 'admin' ? {
         title: (
           <button
             className={styles.createButton}
@@ -692,10 +848,10 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         ),
         key: `folder-create-${folder.id}`,
         isLeaf: true,
-      };
+      } : null;
       
       const children: DataNode[] = [
-        createButtonNode, // Always first
+        ...(createButtonNode ? [createButtonNode] : []), // Only add if admin
         ...folderLibraries.map((lib) => {
           const libProjectId = lib.project_id;
           // Show selected state when on library page OR when viewing an asset in this library
@@ -739,32 +895,34 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                   <span className={styles.itemText} title={lib.name}>{truncateText(lib.name, 15)}</span>
                 </div>
                 <div className={styles.itemActions}>
-                  <Tooltip
-                    title="Predefine asset here"
-                    placement="top"
-                    color="#8B5CF6"
-                  >
-                    <button
-                      className={styles.iconButton}
-                      aria-label="Library sections"
-                      onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
+                  {userRole === 'admin' && (
+                    <Tooltip
+                      title="Predefine asset here"
+                      placement="top"
+                      color="#8B5CF6"
                     >
-                      <Image
-                        src={showAssetPageIcons ? sidebarFolderIcon4 : predefineSettingIcon}
-                        alt="Predefine"
-                        width={22}
-                        height={22}
-                      />
-                    </button>
-                  </Tooltip>
+                      <button
+                        className={styles.iconButton}
+                        aria-label="Library sections"
+                        onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
+                      >
+                        <Image
+                          src={showAssetPageIcons ? sidebarFolderIcon4 : predefineSettingIcon}
+                          alt="Predefine"
+                          width={22}
+                          height={22}
+                        />
+                      </button>
+                    </Tooltip>
+                  )}
                 </div>
               </div>
             ),
             key: `library-${lib.id}`,
             isLeaf: false, // Allow expand to show assets and create button
             children: [
-              // Create new asset button - always first
-              {
+              // Create new asset button - only for admin
+              ...(userRole === 'admin' ? [{
                 title: (
                   <button
                     className={styles.createButton}
@@ -800,18 +958,23 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                 ),
                 key: `add-asset-${lib.id}`,
                 isLeaf: true,
-              },
+              }] : []),
               // Existing assets
               ...(assets[lib.id] || []).map<DataNode>((asset) => {
                 const isCurrentAsset = currentIds.assetId === asset.id;
+                // Only admin can click assets to view/edit
+                const canClickAsset = userRole === 'admin';
                 return {
                   title: (
                     <div 
-                      className={`${styles.itemRow} ${isCurrentAsset ? styles.assetItemActive : ''}`}
+                      className={`${styles.itemRow} ${isCurrentAsset ? styles.assetItemActive : ''} ${!canClickAsset ? styles.itemDisabled : ''}`}
                       onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
+                      style={!canClickAsset ? { cursor: 'default', opacity: 0.6 } : undefined}
                     >
                       <div className={styles.itemMain}>
-                        <span className={styles.itemText} title={asset.name}>{truncateText(asset.name, 15)}</span>
+                        <span className={styles.itemText} title={asset.name && asset.name !== 'Untitled' ? asset.name : ''}>
+                          {truncateText(asset.name && asset.name !== 'Untitled' ? asset.name : '', 15)}
+                        </span>
                       </div>
                       <div className={styles.itemActions}>
                       </div>
@@ -819,6 +982,8 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                   ),
                   key: `asset-${asset.id}`,
                   isLeaf: true,
+                  // Disable selection for non-admin users
+                  disabled: !canClickAsset,
                 };
               }),
             ],
@@ -904,32 +1069,34 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
               <span className={styles.itemText} title={lib.name}>{truncateText(lib.name, 15)}</span>
             </div>
             <div className={styles.itemActions}>
-              <Tooltip
-                title="Predefine asset here"
-                placement="top"
-                color="#8B5CF6"
-              >
-                <button
-                  className={styles.iconButton}
-                  aria-label="Library sections"
-                  onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
+              {userRole === 'admin' && (
+                <Tooltip
+                  title="Predefine asset here"
+                  placement="top"
+                  color="#8B5CF6"
                 >
-                  <Image
-                    src={showAssetPageIcons ? sidebarFolderIcon4 : predefineSettingIcon}
-                    alt="Predefine"
-                    width={22}
-                    height={22}
-                  />
-                </button>
-              </Tooltip>
+                  <button
+                    className={styles.iconButton}
+                    aria-label="Library sections"
+                    onClick={(e) => handleLibraryPredefineClick(libProjectId, lib.id, e)}
+                  >
+                    <Image
+                      src={showAssetPageIcons ? sidebarFolderIcon4 : predefineSettingIcon}
+                      alt="Predefine"
+                      width={22}
+                      height={22}
+                    />
+                  </button>
+                </Tooltip>
+              )}
             </div>
           </div>
         ),
         key: `library-${lib.id}`,
         isLeaf: false, // Allow expand to show assets and create button
         children: [
-          // Create new asset button - always first
-          {
+          // Create new asset button - only for admin
+          ...(userRole === 'admin' ? [{
             title: (
               <button
                 className={styles.createButton}
@@ -965,18 +1132,23 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
             ),
             key: `add-asset-${lib.id}`,
             isLeaf: true,
-          },
+          }] : []),
           // Existing assets
           ...(assets[lib.id] || []).map<DataNode>((asset) => {
             const isCurrentAsset = currentIds.assetId === asset.id;
+            // Only admin can click assets to view/edit
+            const canClickAsset = userRole === 'admin';
             return {
               title: (
                 <div 
-                  className={`${styles.itemRow} ${isCurrentAsset ? styles.assetItemActive : ''}`}
+                  className={`${styles.itemRow} ${isCurrentAsset ? styles.assetItemActive : ''} ${!canClickAsset ? styles.itemDisabled : ''}`}
                   onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
+                  style={!canClickAsset ? { cursor: 'default', opacity: 0.6 } : undefined}
                 >
                   <div className={styles.itemMain}>
-                    <span className={styles.itemText} title={asset.name}>{truncateText(asset.name, 15)}</span>
+                    <span className={styles.itemText} title={asset.name && asset.name !== 'Untitled' ? asset.name : ''}>
+                      {truncateText(asset.name && asset.name !== 'Untitled' ? asset.name : '', 15)}
+                    </span>
                   </div>
                   <div className={styles.itemActions}>
                   </div>
@@ -984,6 +1156,8 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
               ),
               key: `asset-${asset.id}`,
               isLeaf: true,
+              // Disable selection for non-admin users
+              disabled: !canClickAsset,
             };
           }),
         ],
@@ -991,7 +1165,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     });
     
     return result;
-  }, [folders, libraries, assets, currentIds.projectId, currentIds.libraryId, currentIds.isLibraryPage, currentIds.assetId, handleLibraryPredefineClick, router]);
+  }, [folders, libraries, assets, currentIds.projectId, currentIds.libraryId, currentIds.isLibraryPage, currentIds.assetId, handleLibraryPredefineClick, router, userRole]);
 
   const selectedKey = useMemo(() => {
     const keys: string[] = [];
@@ -1017,7 +1191,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
     return keys;
   }, [pathname, currentIds.folderId, currentIds.libraryId, currentIds.assetId, currentIds.isLibraryPage]);
 
-  const onSelect = (_keys: React.Key[], info: any) => {
+  const onSelect = async (_keys: React.Key[], info: any) => {
     const key: string = info.node.key;
     if (key.startsWith('folder-create-')) {
       // Handle create button click - button's onClick will handle this
@@ -1036,13 +1210,29 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
       const id = key.replace('folder-', '');
       // Navigate to folder page
       if (currentIds.projectId) {
+        // Clear authorization caches before navigation
+        try {
+          const { globalRequestCache } = await import('@/lib/hooks/useRequestCache');
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const authCacheKeys = [
+              `auth:project-access:${currentIds.projectId}:${user.id}`,
+              `auth:folder-access:${id}:${user.id}`,
+            ];
+            authCacheKeys.forEach(key => {
+              globalRequestCache.invalidate(key);
+            });
+          }
+        } catch (error) {
+          console.error('[Sidebar] Error clearing auth caches:', error);
+        }
         router.push(`/${currentIds.projectId}/folder/${id}`);
       }
     } else if (key.startsWith('library-')) {
       const id = key.replace('library-', '');
       setSelectedFolderId(null); // Clear folder selection when library is selected
       const projId = libraries.find((l) => l.id === id)?.project_id || currentIds.projectId || '';
-      handleLibraryClick(projId, id);
+      await handleLibraryClick(projId, id);
     } else if (key.startsWith('asset-')) {
       const assetId = key.replace('asset-', '');
       setSelectedFolderId(null); // Clear folder selection when asset is selected
@@ -1059,7 +1249,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         return false;
       });
       if (libId && projId) {
-        handleAssetClick(projId, libId, assetId);
+        await handleAssetClick(projId, libId, assetId);
       }
     }
   };
@@ -1105,6 +1295,13 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
 
   const handleContextMenuAction = (action: ContextMenuAction) => {
     if (!contextMenu) return;
+    
+    // Handle collaborators action for projects
+    if (action === 'collaborators' && contextMenu.type === 'project') {
+      setContextMenu(null);
+      router.push(`/${contextMenu.id}/collaborators`);
+      return;
+    }
     
     // Handle rename action (Project info / Library info / Folder rename)
     if (action === 'rename') {
@@ -1437,19 +1634,21 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
               {!currentIds.isPredefinePage && !currentIds.assetId && (
                 <div className={styles.sectionTitle}>
                   <span>Libraries</span>
-                  <button
-                    ref={setAddButtonRef}
-                    className={styles.addButton}
-                    onClick={handleAddButtonClick}
-                    title="Add new folder or library"
-                  >
-                    <Image
-                      src={addProjectIcon}
-                      alt="Add library"
-                      width={24}
-                      height={24}
-                    />
-                  </button>
+                  {userRole === 'admin' && (
+                    <button
+                      ref={setAddButtonRef}
+                      className={styles.addButton}
+                      onClick={handleAddButtonClick}
+                      title="Add new folder or library"
+                    >
+                      <Image
+                        src={addProjectIcon}
+                        alt="Add library"
+                        width={24}
+                        height={24}
+                      />
+                    </button>
+                  )}
                 </div>
               )}
               <div className={styles.sectionList}>
@@ -1506,11 +1705,11 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                               className={styles.libraryBackButton}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (currentIds.projectId) {
-                                  router.push(`/${currentIds.projectId}`);
+                                if (currentIds.projectId && currentIds.libraryId) {
+                                  router.push(`/${currentIds.projectId}/${currentIds.libraryId}`);
                                 }
                               }}
-                              title="Back to tree view"
+                              title="Back to library"
                             >
                               <Image
                                 src={sidebarFolderIcon3}
@@ -1530,71 +1729,81 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
                             <span className={styles.itemText} title={libraryName}>{truncateText(libraryName, 15)}</span>
                           </div>
                           <div className={styles.itemActions}>
-                            <Tooltip
-                              title="Predefine asset here"
-                              placement="top"
-                              color="#8B5CF6"
-                            >
-                              <button
-                                className={styles.iconButton}
-                                aria-label="Library sections"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (currentIds.projectId && currentIds.libraryId) {
-                                    handleLibraryPredefineClick(currentIds.projectId, currentIds.libraryId, e);
-                                  }
-                                }}
+                            {userRole === 'admin' && (
+                              <Tooltip
+                                title="Predefine asset here"
+                                placement="top"
+                                color="#8B5CF6"
                               >
-                                <Image
-                                  src={sidebarFolderIcon4}
-                                  alt="Predefine"
-                                  width={22}
-                                  height={22}
-                                />
-                              </button>
-                            </Tooltip>
+                                <button
+                                  className={styles.iconButton}
+                                  aria-label="Library sections"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (currentIds.projectId && currentIds.libraryId) {
+                                      handleLibraryPredefineClick(currentIds.projectId, currentIds.libraryId, e);
+                                    }
+                                  }}
+                                >
+                                  <Image
+                                    src={sidebarFolderIcon4}
+                                    alt="Predefine"
+                                    width={22}
+                                    height={22}
+                                  />
+                                </button>
+                              </Tooltip>
+                            )}
                           </div>
                         </div>
-                        {/* Add new asset button */}
-                        <button
-                          className={`${styles.createButton} ${styles.createButtonAligned}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (currentIds.projectId && currentIds.libraryId) {
-                              // Navigate to new asset page
-                              // If library has no properties, the page will show predefine prompt (NoassetIcon1.svg)
-                              // If library has properties, the page will show the form to create new asset
-                              router.push(`/${currentIds.projectId}/${currentIds.libraryId}/new`);
-                            }
-                          }}
-                        >
-                          <span className={styles.createButtonText}>
-                            <Image
-                              src={sidebarFolderIcon5}
-                              alt="Add"
-                              width={24}
-                              height={24}
-                            />
-                            Add new asset
-                          </span>
-                        </button>
+                        {/* Add new asset button - only for admin */}
+                        {userRole === 'admin' && (
+                          <button
+                            className={`${styles.createButton} ${styles.createButtonAligned}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (currentIds.projectId && currentIds.libraryId) {
+                                // Navigate to new asset page
+                                // If library has no properties, the page will show predefine prompt (NoassetIcon1.svg)
+                                // If library has properties, the page will show the form to create new asset
+                                router.push(`/${currentIds.projectId}/${currentIds.libraryId}/new`);
+                              }
+                            }}
+                          >
+                            <span className={styles.createButtonText}>
+                              <Image
+                                src={sidebarFolderIcon5}
+                                alt="Add"
+                                width={24}
+                                height={24}
+                              />
+                              Add new asset
+                            </span>
+                          </button>
+                        )}
                         {/* Assets list */}
                         <div className={styles.assetList}>
                           {libraryAssets.map((asset) => {
                             const isCurrentAsset = currentIds.assetId === asset.id;
+                            // Only admin can click assets to view/edit
+                            const canClickAsset = userRole === 'admin';
                             return (
                               <div
                                 key={asset.id}
                                 className={`${styles.itemRow} ${isCurrentAsset ? styles.assetItemActive : ''}`}
                                 onClick={() => {
-                                  if (currentIds.projectId && currentIds.libraryId) {
+                                  // Only admin can navigate to asset detail
+                                  if (canClickAsset && currentIds.projectId && currentIds.libraryId) {
                                     handleAssetClick(currentIds.projectId, currentIds.libraryId, asset.id);
                                   }
                                 }}
                                 onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
+                                style={!canClickAsset ? { cursor: 'default', opacity: 0.6 } : undefined}
                               >
                                 <div className={styles.itemMain}>
-                                  <span className={styles.itemText} title={asset.name}>{truncateText(asset.name, 20)}</span>
+                                  <span className={styles.itemText} title={asset.name && asset.name !== 'Untitled' ? asset.name : ''}>
+                                    {truncateText(asset.name && asset.name !== 'Untitled' ? asset.name : '', 20)}
+                                  </span>
                                 </div>
                                 <div className={styles.itemActions}>
                                 </div>
@@ -1734,6 +1943,7 @@ export function Sidebar({ userProfile, onAuthRequest }: SidebarProps) {
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          type={contextMenu.type}
           onClose={() => setContextMenu(null)}
           onAction={handleContextMenuAction}
           type={contextMenu.type}
