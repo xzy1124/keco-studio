@@ -45,8 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const currentUserId = useRef<string | null>(null);
 
   const fetchUserProfile = useCallback(async (userId: string): Promise<void> => {
-    // Skip only if already in progress
-    if (profileFetchInProgress.current) {
+    if (profileFetchInProgress.current || currentUserId.current === userId) {
       return;
     }
 
@@ -61,47 +60,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error) {
-        // If profile doesn't exist, try to create it automatically
-        if (error.code === 'PGRST116') { // PGRST116 = no rows returned
-          // Get user email from auth.users
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
-          
-          if (!userError && user && user.id === userId) {
-            // Try to create profile automatically
-            const { data: newProfile, error: insertError } = await supabase
-              .from('profiles')
-              .insert({
-                id: userId,
-                email: user.email || '',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .select()
-              .single();
-            
-            if (!insertError && newProfile) {
-              setUserProfile(newProfile);
-              profileFetchInProgress.current = false;
-              return;
-            }
-          }
-          // Reset currentUserId to allow retry
-          currentUserId.current = null;
-        } else {
-          // Reset currentUserId to allow retry
-          currentUserId.current = null;
+        // If profile doesn't exist (e.g., new user), that's okay
+        // Don't log as error, just set profile to null
+        if (error.code !== 'PGRST116') { // PGRST116 = no rows returned
+          console.error('Failed to fetch profile:', error);
         }
         setUserProfile(null);
       } else if (profile) {
         setUserProfile(profile);
       } else {
-        // Reset currentUserId to allow retry
-        currentUserId.current = null;
         setUserProfile(null);
       }
     } catch (err) {
-      // Reset currentUserId to allow retry
-      currentUserId.current = null;
+      console.error('Profile fetch error:', err);
       setUserProfile(null);
     } finally {
       profileFetchInProgress.current = false;
