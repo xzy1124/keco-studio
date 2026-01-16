@@ -261,14 +261,12 @@ export default function CollaboratorsList({
   
   // Get display name for collaborator
   const getDisplayName = (collab: Collaborator): string => {
-    const profile = collab.profile || collab.user_profiles || collab.profiles;
-    return profile?.username || profile?.full_name || profile?.name || profile?.email || 'User';
+    return collab.userName || collab.userEmail || 'User';
   };
   
   // Get email for collaborator
   const getEmail = (collab: Collaborator): string => {
-    const profile = collab.profile || collab.user_profiles || collab.profiles;
-    return profile?.email || '';
+    return collab.userEmail || '';
   };
   
   return (
