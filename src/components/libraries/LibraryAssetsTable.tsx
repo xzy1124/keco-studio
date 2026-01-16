@@ -3455,6 +3455,86 @@ export function LibraryAssetsTable({
     setBatchEditMenuPosition(null);
   }, [clipboardData, selectedCells, selectedRowIds, getAllRowsForCellSelection, orderedProperties, isCutOperation, cutCells, onSaveAsset, onUpdateAsset, library]);
 
+  // Keyboard shortcuts for Cut, Copy, Paste
+  useEffect(() => {
+    // Detect OS to use correct modifier key (Ctrl for Windows/Linux, Cmd for macOS)
+    // Use modern API if available, fallback to userAgent
+    const isMac = typeof navigator !== 'undefined' && (
+      // Modern API (Chrome 92+, Edge 92+) - check if available
+      (('userAgentData' in navigator) && 
+       (navigator as any).userAgentData?.platform?.toLowerCase().includes('mac')) ||
+      // Fallback to userAgent
+      navigator.userAgent.toUpperCase().includes('MAC')
+    );
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts if:
+      // 1. User is editing a cell (contentEditable)
+      // 2. User is typing in an input, textarea, or select element
+      // 3. User is in a modal or dropdown
+      const target = e.target as HTMLElement;
+      const isEditing = editingCell !== null;
+      const isInputElement = target.tagName === 'INPUT' || 
+                            target.tagName === 'TEXTAREA' || 
+                            target.tagName === 'SELECT' ||
+                            target.isContentEditable ||
+                            target.closest('input') !== null ||
+                            target.closest('textarea') !== null ||
+                            target.closest('[contenteditable="true"]') !== null ||
+                            target.closest('.ant-select') !== null ||
+                            target.closest('.ant-input') !== null ||
+                            target.closest('.ant-modal') !== null;
+      
+      if (isEditing || isInputElement) {
+        return; // Let browser handle default behavior
+      }
+
+      // Check modifier key
+      const hasModifier = isMac ? e.metaKey : e.ctrlKey;
+      if (!hasModifier) {
+        return;
+      }
+
+      // Handle Cut (Ctrl/Cmd + X)
+      if (e.key === 'x' || e.key === 'X') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (selectedCells.size > 0 || selectedRowIds.size > 0) {
+          handleCut();
+        }
+        return;
+      }
+
+      // Handle Copy (Ctrl/Cmd + C)
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (selectedCells.size > 0 || selectedRowIds.size > 0) {
+          handleCopy();
+        }
+        return;
+      }
+
+      // Handle Paste (Ctrl/Cmd + V)
+      if (e.key === 'v' || e.key === 'V') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (clipboardData && clipboardData.length > 0 && clipboardData[0].length > 0) {
+          handlePaste();
+        }
+        return;
+      }
+    };
+
+    // Add event listener
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [editingCell, selectedCells, selectedRowIds, clipboardData, handleCut, handleCopy, handlePaste]);
+
   // Handle Insert Row Above operation
   const handleInsertRowAbove = useCallback(async () => {
     
