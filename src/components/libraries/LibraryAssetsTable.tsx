@@ -5531,7 +5531,7 @@ export function LibraryAssetsTable({
                     <Input
                       value={newRowData[property.key] || ''}
                       onChange={(e) => handleInputChange(property.key, e.target.value)}
-                      placeholder={`Enter ${property.name.toLowerCase()}`}
+                      placeholder=""
                       className={styles.editInput}
                       disabled={isSaving}
                     />
