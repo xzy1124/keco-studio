@@ -41,7 +41,7 @@ export function EditLibraryModal({ open, libraryId, onClose, onUpdated }: EditLi
           }
         })
         .catch((e: any) => {
-          console.error('Failed to load library:', e);
+          console.error('Failed too load library:', e);
           setError(e?.message || 'Failed to load library');
         })
         .finally(() => {
